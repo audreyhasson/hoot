@@ -73,7 +73,6 @@ class Cup():
 ####### SERVER STATION SCREEN ##################
 def station_onScreenStart(app):
     app.fountainWidth = app.width/3
-    app.drinks = ['Water', 'Coke', 'Lemonade']
     app.testTheta = 0
     app.cupList = [] #Contains cups that are not in cup stack
     app.cupHeld = None # index
@@ -96,6 +95,8 @@ def station_redrawAll(app):
     height = 30
     width = app.width/3 - 60
     app.tray.draw(width, height)
+    for plate in app.tray.inventory:
+        plate.draw()
     drawFountain(app)
     # Draw Cup stack
     for i in range(5):
