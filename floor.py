@@ -77,6 +77,7 @@ def floor_onScreenStart(app):
                     app.leftWaitress, app.upWaitress])
 
     app.waitress = Waitress(app.waitressImages, 50+app.sidebarWidth, 100, 0, 0)
+    app.tray = Tray(50+app.sidebarWidth, 100)
     # Currently max sprite width is just the largest distance any 
     # key point is from the center of the waitress
     app.maxSpriteHeight = app.maxSpriteWidth = 20
@@ -156,6 +157,7 @@ class Customer(Sprite):
         if self.path == [] and not self.seated and self.table!=None:
             # Jump to an open seat
             seatedPos = None
+            self.dIndex = 1
             for seat in self.table.seats:
                 if not seat[1]: # if no one is sitting there
                     seatedPos = seat[0]
@@ -168,7 +170,6 @@ class Customer(Sprite):
                         self.table.addTask('say hi')
                         self.table.status = 1
                     return
-
 
 class Waitress(Sprite):
     def __init__(self, imageList, cx, cy, dIndex, lastDIndex):
@@ -212,6 +213,7 @@ class Ticket:
     def __init__(self):
         self.empty = True
         self.order = []
+        self.completedItems = []
 
     def __repr__(self):
         return repr(self.order)
@@ -246,6 +248,20 @@ class Task:
     
     def __lt__(self, other):
         return self.priority < other.priority
+
+class Tray:
+    def __init__(self, cx, cy, width=10, height=3):
+        self.cx = cx
+        self.cy = cy
+        self.inventory = []
+        self.capacity = 5
+
+    def draw(self, width, height):
+        drawOval(self.cx, self.cy, width, height, fill='steelBlue', border='black')
+
+    def move(self, cx, cy):
+        self.cx = cx
+        self.cy = cy
 
 ##### END CLASSES #####
 
@@ -541,7 +557,11 @@ def getSortedTaskList(app):
     
 def drawWaitress(app):
     img = app.waitress.imageList[app.waitress.dIndex].picture
-    drawImage(img, app.waitress.cx, app.waitress.cy, align='center')    
+    if app.waitress.dIndex==3:
+        app.tray.draw(15, 4)
+    drawImage(img, app.waitress.cx, app.waitress.cy, align='center')   
+    if app.waitress.dIndex!=3: 
+        app.tray.draw(15, 4)
 
 def makeNewCustomer(app):
     if not isOpenTable(app): 
@@ -780,6 +800,7 @@ def handleWaitressMovement(app, key):
                 imageList, app.waitress.dIndex, app.waitress.lastDIndex, 'wait')
     if waitressCrashed(app):
         handleCrash(app)
+    app.tray.cx, app.tray.cy = app.waitress.cx+10, app.waitress.cy+10
     setSelectedTable(app)
     checkScreenSwitch(app)
 
@@ -799,10 +820,12 @@ def checkScreenSwitch(app):
     if klowX<=x<=khighX and klowY<=y<=khighY:
         app.waitress.cx = 100 + app.sidebarWidth + 20
         app.waitress.cy = app.height - 30
+        app.tray.move(app.width-120, app.height-200)
         setActiveScreen('kitchen')
     elif slowX<=x<=shighX and slowY<=y<=shighY:
         app.waitress.cx = app.width - 100 - 20
         app.waitress.cy = app.height - 30
+        app.tray.move(app.width/3, app.height/2)
         setActiveScreen('station')
 
 def waitressCrashed(app):

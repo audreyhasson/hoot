@@ -3,10 +3,15 @@ except: from cmu_graphics import *
 
 from runAppWithScreens import *
 
+######## CLASSES
+
+
+######## END OF CLASSES
+
 ####### KITCHEN SCREEN ##################
 def kitchen_onScreenStart(app):
     app.tixBarTop = 40
-    pass
+    app.itemCookTime = 400
 
 def kitchen_redrawAll(app):
     drawRect(0,0, app.width, app.height, fill=app.colors['lightBrown'])
@@ -18,7 +23,8 @@ def kitchen_redrawAll(app):
 
 def drawWaitress(app):
     img = app.waitress.imageList[1].picture
-    drawImage(img, app.width-50, app.height-200, align='center', height=400, width=400, rotateAngle=-30) 
+    drawImage(img, app.width-50, app.height-300, align='center', height=400, width=400, rotateAngle=-30) 
+    app.tray.draw(app.width/3-40, 30)
 
 def drawBackground(app):
     #countertop
@@ -57,7 +63,6 @@ def getTickets(app):
     ticketList = []
     for table in app.tableData:
         if not table.ticket.empty:
-            print('nonempy', table.ticket)
             ticketList.append(table.ticket)
     return sorted(ticketList)
 
