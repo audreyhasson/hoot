@@ -42,8 +42,8 @@ def floor_onScreenStart(app):
     app.easyLayout = [(98, 168), (222, 312), (366, 484), (432, 194)]
     app.midLayout = [(95, 150), (95, 315), (290, 150), (480, 150), (290, 315), 
                     (480, 315), (95, 490), (290, 490), (480, 490)]
-    app.hardLayout = [(467, 134), (468, 217), (381, 169), (80, 143), (81, 216), 
-                        (503, 341), (324, 306), (323, 382), (368, 544), 
+    app.hardLayout = [(490, 183), (381, 169), (80, 143), (81, 216), 
+                        (503, 341), (323, 382), (368, 544), 
                         (139, 374), (138, 460), (223, 175)]
     app.tempTableList = [(85, 82), (318, 134), (62, 217), 
                         (299, 283), (137, 325)]
@@ -66,9 +66,11 @@ def floor_onScreenStart(app):
                         (592, 418, 406, 408), (282, 481, 282, 599)]
     app.lineList = []
     app.newLine = ()
-    # arc (cx, cy, width, height, startAngle, sweepAngle)
-    # directions: right, down, left, up NOT CURRENTLY IN USE
-    app.directions = [90, 180, 270, 0]
+
+    # Alert help
+    app.alert = None
+    app.alertLength = app.stepsPerSecond * 3
+
     app.jumpDist = 10
     app.barHeight = 40 
     # Waitress Images
@@ -115,7 +117,7 @@ def floor_onScreenStart(app):
     # For pathfinding
     app.nodeList = []
     app.edgeSet = set()
-    app.nodeDist = 60
+    app.nodeDist = 30
     app.tolerance = app.nodeDist * 2
     # Path finding testing tools
     app.findPath = False
@@ -315,7 +317,7 @@ class Task:
         return self.priority < other.priority
 
 class Tray:
-    def __init__(self, cx, cy, width=10, height=3):
+    def __init__(self, cx, cy):
         self.cx = cx
         self.cy = cy
         self.inventory = []
@@ -325,10 +327,12 @@ class Tray:
         drawOval(self.cx, self.cy, width, height, fill='steelBlue', border='black')
         for i in range(len(self.inventory)):
             item = self.inventory[i]
+            p = 0
             if isinstance(item, Plate):
-                cy = self.cy - Plate.height*i
+                cy = self.cy - Plate.height*p
                 item.cx = self.cx
                 item.cy = cy
+                p+=1
 
     def pointInTray(self, x, y, width, height):
         yRad = height/2
@@ -595,9 +599,19 @@ def floor_redrawAll(app):
     #     drawCircle(x, y, 2, fill=colors[i])
     if app.showNodes:
         drawNodesAndEdges(app)
-    if app.currentOrder !=None and app.selectedTable!=None:
+    if (app.currentOrder !=None and app.selectedTable!=None 
+        and app.currentOrder in app.tableData[app.selectedTable].order):
         app.tableData[app.selectedTable].demand(app.currentOrder)
+    drawAlert(app)
     drawHelpOverlays(app)
+
+def drawAlert(app):
+    if app.alert!=None:
+        msg = app.alert[0]
+        width = len(msg)*10 + 20
+        cx, cy = app.width/2, app.height-80 
+        drawRect(cx, cy, width, 40, align='center', fill='white', border='black')
+        drawLabel(msg, cx, cy, size = 20)
 
 def drawHelpOverlays(app):
     overlayNum = 0
@@ -645,8 +659,9 @@ def drawTables(app):
             if i == app.selectedTable:
                 drawCircle(table.cx, table.cy, table.radius, fill=app.tableColor, opacity=100)
                 drawCircle(table.cx, table.cy, table.radius+3, fill=None, border=app.colors['darkBrown'])
-                if table.lastAttended!=None and app.steps - table.lastAttended>Table.patience:
-                    drawTask(app, table)
+                # Old drawing task in "thought bubbles" image.pngfunctionality... May revive later
+                # if table.lastAttended!=None and app.steps - table.lastAttended>Table.patience:
+                #     drawTask(app, table)
                 drawContents(app, table)
             else:
                 drawCircle(table.cx, table.cy, table.radius, fill=app.tableColor, opacity=80)
@@ -1005,6 +1020,10 @@ def manageHelpOverlays(app, key):
 
 def handleWaitressMovement(app, key):
     #handle waitress movement and direction facing w arrow keys
+    if app.currentOrder!=None:
+        app.currentOrder = None
+        app.pendingOrder = None
+        alert(app, "Don't walk away when a guest is talking! Now you'll never know their order.")
     #app.selectedTable = None
     app.waitress.lastDIndex = app.waitress.dIndex
     cx, cy = app.waitress.cx, app.waitress.cy
@@ -1046,6 +1065,7 @@ def checkScreenSwitch(app):
         app.waitress.cx = 100 + app.sidebarWidth + 20
         app.waitress.cy = app.height - 30
         app.tray.move(app.width-120, app.height-200)
+        print(app.tray, 'is now', app.tray.cx, app.tray.cy)
         setActiveScreen('kitchen')
     elif slowX<=x<=shighX and slowY<=y<=shighY:
         app.waitress.cx = app.width - 100 - 20
@@ -1298,22 +1318,6 @@ def floor_onMousePress(app, mouseX, mouseY):
             desties.add((app.selectedEndNode[0], app.selectedEndNode[1]))
             fullPath = getPathFromNodes(app, app.selectedStartNode, desties)
             app.nodesOfPath = fullPath[1:] if isinstance(fullPath, list) else None
-    else:
-        #get index of table that was hit
-        for i in range(len(app.tableData)):
-            table = app.tableData[i]
-            if (distance(table.cx, table.cy, mouseX, mouseY)<=table.radius
-                and i==app.selectedTable and table.status>0
-                and (table.lastAttended==None or app.steps-table.lastAttended>Table.patience)):
-                table.status = (1+table.status)%(len(app.stati))
-                table.lastAttended = app.steps
-                if table.status == 3:
-                    table.ticket.addItem('banana')
-                    table.ticket.addItem('quinoa')
-                    table.ticket.lastProgressMade = app.steps
-                if table.tasks != []:
-                    table.tasks.pop(0)
-        #update status by 1
 
 def attemptTaskCompletion(app):
     if app.selectedTable==None: return
@@ -1331,7 +1335,7 @@ def attemptTaskCompletion(app):
         # nextTask = app.stati[table.status]
         # table.tasks.append(nextTask)
     else:
-        alert("You aren't able to do that right now!")
+        alert(app, "You aren't able to do that right now!")
 
 def equippedForTask(app, task, table):
     # If you don't need anything in your tray, you're equipped
@@ -1447,9 +1451,8 @@ def getDessertOrder(app, table):
     table.tasks.append(Task('give dessert', table.num))
 
 
-def alert(message):
-    # FOR NOW this will print
-    print(message)
+def alert(app, message):
+    app.alert = (message, app.steps)
 
 def floor_onStep(app):
     if not app.paused:
@@ -1477,7 +1480,6 @@ def floor_onStep(app):
         if app.steps in app.pendingOrder.keys():
             Table.demandItem += 1
             app.currentOrder = app.pendingOrder[app.steps]
-            print(app.currentOrder)
         # If we're past all of the order times, kill it
         if app.steps> max(app.pendingOrder.keys())+app.orderTime:
             app.pendingOrder = None
@@ -1492,6 +1494,11 @@ def floor_onStep(app):
         if app.lastEntrance + entranceInterval < app.steps:
             makeNewCustomer(app)
             app.lastEntrance = app.steps
+    # Take away alert if past time
+    if app.alert!=None:
+        alertStart = app.alert[1]
+        if alertStart + app.alertLength < app.steps:
+            app.alert = None
     
 def customerLeave(app, customer):
     # Get path for customer to leave

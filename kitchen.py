@@ -10,10 +10,10 @@ import random
 ####### KITCHEN SCREEN ##################
 def kitchen_onScreenStart(app):
     app.tixBarTop = 40
-    app.itemCookTime = 10
+    app.itemCookTime = 60
+    app.trayX2, app.trayY2 = 780, 400
 
 ######## CLASSES
-## Copied from floor???? Don't know why they wont play nice
 
 class Plate:
     width = 800/3 - 60
@@ -49,8 +49,17 @@ def kitchen_redrawAll(app):
     drawBackground(app)
     drawTickets(app)
     drawWaitress(app)
+    drawAlert(app)
     drawHelpOverlays(app)
     drawLabel('Press right to leave. Click plates to add them to tray.', app.width/2, 15, size=24)
+
+def drawAlert(app):
+    if app.alert!=None:
+        msg = app.alert[0]
+        width = len(msg)*10 + 20
+        cx, cy = app.width/2, app.height-80 
+        drawRect(cx, cy, width, 40, align='center', fill='white', border='black')
+        drawLabel(msg, cx, cy, size = 20)
 
 def drawHelpOverlays(app):
     overlayNum = 0
@@ -85,6 +94,7 @@ def drawHelpOverlays(app):
 def drawWaitress(app):
     img = app.waitress.imageList[1].picture
     drawImage(img, app.width-50, app.height-300, align='center', height=400, width=400, rotateAngle=-30) 
+    app.tray.cx, app.tray.cy = app.trayX2, app.trayY2
     app.tray.draw(app.width/3-40, 30)
     for item in app.tray.inventory:
         if isinstance(item, Plate):
@@ -146,6 +156,9 @@ def getTickets(app, onlyInProgress):
 def kitchen_onKeyPress(app, key):
     if key == 'right':
         setActiveScreen('floor')
+    elif key == 'q':
+        print(app.tray)
+        print(app.tray.cx, app.tray.cy)
     manageHelpOverlays(app, key)
 
 def manageHelpOverlays(app, key):
@@ -158,6 +171,9 @@ def kitchen_onKeyRelease(app, key):
     app.orderToShow = None
     app.showInventory = False
 
+def alert(app, message):
+    app.alert = (message, app.steps)
+
 def kitchen_onMousePress(app, mouseX, mouseY):
     # Check all displayed plates if they are clicked add to inventory
     tickets = getTickets(app, False)
@@ -165,8 +181,7 @@ def kitchen_onMousePress(app, mouseX, mouseY):
         plates = ticket.plates
         for plate in plates:
             if plate.pointInPlate(mouseX, mouseY):
-                print('adding to inv!')
-                print(plate.cx, app.tray.cx)
+                alert(app, f'{plate.item} added to tray')
                 app.tray.inventory.append(plate)
                 plate.cx = app.tray.cx
                 plate.cy = app.tray.cy - len(app.tray.inventory)*Plate.height
@@ -178,6 +193,11 @@ def kitchen_onMousePress(app, mouseX, mouseY):
 def kitchen_onStep(app):
     if not app.paused:
         app.steps +=1
+    # Take away alert if past time
+    if app.alert!=None:
+        alertStart = app.alert[1]
+        if alertStart + app.alertLength < app.steps:
+            app.alert = None
     manageTickets(app)
 
 def manageTickets(app):

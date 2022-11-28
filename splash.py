@@ -12,6 +12,7 @@ def splash_onScreenStart(app):
     Get drinks and bills from drink area
     Get food orders from kitchen
     Press number to view that table's order
+    Don't run into customers! You will be sent to the corner
     '''
 
 def splash_redrawAll(app):

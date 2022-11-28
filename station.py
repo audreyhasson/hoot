@@ -89,6 +89,7 @@ def station_onScreenStart(app):
     app.trayHeight = 30
     app.trayWidth = app.width/3 - 60
     app.printerDims = (app.width/36, (app.height/2)-50, ((app.width/6)*(2/3)), 50)
+    app.trayX, app.trayY = app.width/3, app.height/2
 
 def station_redrawAll(app):
     drawRect(0,0, app.width, app.height, fill='gray')
@@ -104,6 +105,7 @@ def station_redrawAll(app):
     drawRect(app.width/12, app.height/2-printerHeight-15, printerWidth*(2/3), 30, fill='white', align='center')
     drawLabel('click for receipts', app.width/36, app.height/2-printerHeight+20, fill='white', align='left')
     # Tray
+    app.tray.cx, app.tray.cy = app.trayX, app.trayY
     app.tray.draw(app.trayWidth, app.trayHeight)
     for item in app.tray.inventory:
         if type(item)!=Cup:
@@ -122,7 +124,19 @@ def station_redrawAll(app):
                 app.width/2, app.height*(3/4), size=24)
     drawLabel('Drag them to your tray to add them to your tray.',
                 app.width/2, app.height*(3/4)+30, size=24)
+    drawAlert(app)
     drawHelpOverlays(app)
+
+def drawAlert(app):
+    if app.alert!=None:
+        msg = app.alert[0]
+        width = len(msg)*10 + 20
+        cx, cy = app.width/2, app.height-80 
+        drawRect(cx, cy, width, 40, align='center', fill='white', border='black')
+        drawLabel(msg, cx, cy, size = 20)
+
+def alert(app, message):
+    app.alert = (message, app.steps)
 
 def drawHelpOverlays(app):
     overlayNum = 0
@@ -184,6 +198,7 @@ def drawFountain(app):
         
 def station_onKeyPress(app, key):
     if key == 'left':
+        cleanStation(app)
         setActiveScreen('floor')
     elif key == 'up':
         app.testTheta += 10
@@ -211,6 +226,11 @@ def station_onStep(app):
         if cup.zone!=None:
             if cup.drink==None or cup.drink==app.drinks[cup.zone]:
                 cup.fillCup(app.drinks[cup.zone])
+    # Take away alert if past time
+    if app.alert!=None:
+        alertStart = app.alert[1]
+        if alertStart + app.alertLength < app.steps:
+            app.alert = None
 
 def station_onMousePress(app, mouseX, mouseY):
     # Check if mouse on cupstack
@@ -218,7 +238,7 @@ def station_onMousePress(app, mouseX, mouseY):
     cupstackLeft = app.width*(11/12) - Cup.brimWidth/2
     cupstackRight = app.width*(11/12) + Cup.brimWidth/2
     cupstackBottom = app.height/2
-    cupstackTop = app.height/2 - (5 * (1/3) * Cup.cupHeight)
+    cupstackTop = app.height/2 - (2.4 * Cup.cupHeight)
     if (cupstackLeft<=mouseX<=cupstackRight and
         cupstackTop<=mouseY<=cupstackBottom):
         # Add a new cup to cuplist and set that cup to cupHeld
@@ -284,6 +304,8 @@ def station_onMouseRelease(app, mouseX, mouseY):
         x = cup.cx
         y = cup.cy + (Cup.cupHeight*.5)
         if app.tray.pointInTray(x, y, app.trayWidth, app.trayHeight) and not (cup in app.tray.inventory):
+            drink = cup.drink if cup.drink!=None else 'nothingness'
+            alert(app, f'Added cup of {drink} to tray')
             print('the cup is in the tray')
             app.tray.inventory.append(cup)
         # If it's not in the tray but it's in the inventory, remove it

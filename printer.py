@@ -19,7 +19,20 @@ def printer_redrawAll(app):
         drawLabel(f'Table {table.num}', app.width/4, thisStart)
     if app.tableToShow!=None:
         drawBill(app)
+    drawAlert(app)
+    drawLabel('Press left to go back', app.width/4, app.height-50, size=20)
     drawHelpOverlays(app)
+
+def drawAlert(app):
+    if app.alert!=None:
+        msg = app.alert[0]
+        width = len(msg)*10 + 20
+        cx, cy = app.width/2, app.height-80 
+        drawRect(cx, cy, width, 40, align='center', fill='white', border='black')
+        drawLabel(msg, cx, cy, size = 20)
+
+def alert(app, message):
+    app.alert = (message, app.steps)
 
 def drawBill(app):
     drawLabel(f'Bill for table {app.tableToShow}', app.width*(3/4), 50)
@@ -46,8 +59,9 @@ def printer_onKeyPress(app, key):
         if int(key)<len(app.tableData):
             app.tableToShow = int(key)
     elif key=='enter':
-        if app.tableToShow!=None:
+        if app.tableToShow!=None and app.tableData[app.tableToShow].bill.items!=[]:
             bill = app.tableData[app.tableToShow].bill
+            alert(app, f'Added bill for table {app.tableToShow} to tray')
             app.tray.inventory.append(bill)
     elif key == 'i':
         app.showInventory = True
@@ -81,6 +95,15 @@ def drawHelpOverlays(app):
         else:
             drawLabel("There's nothing on your tray", app.width/2, app.height/2)
         overlayNum+=1
+
+def printer_onStep(app):
+    if not app.paused:
+        app.steps +=1
+    # Take away alert if past time
+    if app.alert!=None:
+        alertStart = app.alert[1]
+        if alertStart + app.alertLength < app.steps:
+            app.alert = None
 
 def printer_onKeyRelease(app, key):
     app.showInventory = False
