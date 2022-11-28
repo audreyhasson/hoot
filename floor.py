@@ -4,16 +4,17 @@ from runAppWithScreens import *
 from kitchen import *
 from splash import *
 from station import *
+from printer import *
 
 import random
 import math
 import copy
 from PIL import Image
-import time
 
 ### CITATIONS
 # https://realpython.com/python-sleep/
-
+# https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm
+# https://www.freecodecamp.org/news/dijkstras-shortest-path-algorithm-visual-introduction/
 
 def floor_onScreenStart(app):
     #editor tools
@@ -46,12 +47,20 @@ def floor_onScreenStart(app):
                         (139, 374), (138, 460), (223, 175)]
     app.tempTableList = [(85, 82), (318, 134), (62, 217), 
                         (299, 283), (137, 325)]
-    app.tableData = [] 
+    app.difficulty = 1 # int from 1 to 10
+    app.lastEntrance = None
+    app.tableData = [Table(cx+app.sidebarWidth, cy, 0, 5) for (cx, cy) in app.easyLayout]
+    
     app.selectedTable = None
-    app.stati = (['empty','say hi', 'give drinks', 'get order', 'give order', 'get dessert order',
+    app.stati = (['empty','say hi', 'give drinks', 'take order', 'give order', 'get dessert order',
                 'give dessert', 'give bill', 'say bye (opt)'])
     app.drinks = ['Water', 'Coke', 'Lemonade']
+    app.foods = (['sandwich', 'onion soup', 'jam', 'ham', 'toast', 'pumpkin pie',
+                'seeds', 'jelly', 'funions'])
+    app.desserts = (['chocolate cake', 'cheesecake', 'flan', 'tres leches', 'banana pie', 'muffin'])
+    app.orderTime = 2*20
     app.pendingOrder = None
+    app.currentOrder = None
     app.tempLineList = [(312, 111, 322, 248), (322, 248, 405, 250), 
                         (405, 250, 406, 409), (407, 409, 406, 407), 
                         (592, 418, 406, 408), (282, 481, 282, 599)]
@@ -99,6 +108,10 @@ def floor_onScreenStart(app):
     #app.customerList = [[newCustomerImageList, *app.customerOrigin, 2, 2, startingPath, False]]
     app.customerList=[]
     app.customerJumpDist = 5
+
+    app.orderToShow = None
+    app.showInventory = False
+    app.showHelp = False
     # For pathfinding
     app.nodeList = []
     app.edgeSet = set()
@@ -109,7 +122,7 @@ def floor_onScreenStart(app):
     app.selectedStartNode = None
     app.selectedEndNode = None
     app.nodesOfPath = None
-    
+    layNodes(app)
     
     # Tasks <3
     #app.taskList = [Task('get drinks to', 3), Task('get napkin for', 1)]
@@ -169,8 +182,6 @@ class Customer(Sprite):
                     self.cx, self.cy = seatedPos[0], seatedPos[1]
                     seat[1] = True
                     self.seated = True
-                    # add an occupant to the tableCustomerTable
-                    self.table.occupants += 1
                     if self.table.status==0: 
                         self.table.addTask('say hi')
                         self.table.status = 1
@@ -190,6 +201,7 @@ class Table():
     # [[coords], occupants, maxOccupancy]
     num = 0
     patience = 100
+    demandItem = 0
     def __init__(self, cx, cy, occupants, maxOccupancy, radius=30):
         self.cx = cx
         self.cy = cy
@@ -197,11 +209,13 @@ class Table():
         self.maxOccupancy = maxOccupancy
         self.status = 0
         self.ticket = Ticket()
+        self.order = []
+        self.contents = []
         self.radius = radius
         self.num = Table.num
         self.tasks = []
         self.lastAttended = None
-        self.bill = None # Will maybe need to create a bill class but maybe also not
+        self.bill = Bill(self.num) # Will maybe need to create a bill class but maybe also not
         Table.num += 1
         self.seats = [[getEndpoint((180/self.maxOccupancy)*p-150, self.radius, self.cx, self.cy), False] for p in range(4)]
 
@@ -218,15 +232,47 @@ class Table():
         # Display that in speech bubble
         cx = self.cx + 2*self.radius
         cy = self.cy - 2*self.radius
-        drawRect(cx, cy, 150, 40, align='center')
+        color = 'lightGreen' if Table.demandItem%2 == 0 else 'steelBlue'
+        drawRect(cx, cy, 100, 40, align='center', fill=color, border='black')
         drawLabel(f'{item}', cx, cy)
 
     def addTask(self, task):
         self.tasks.append(Task(task, self.num))
 
+class Bill:
+    def __init__(self, num):
+        self.items = []
+        self.cost = 0
+        self.table = num
+    
+    def getCost(self):
+        cost = 0
+        for item in self.items:
+            cost += random.choice([19.95, 12.04, 2.01, 15.50])
+        return int(cost*100)/100
+
+    def addItems(self, itemList):
+        self.items.extend(itemList)
+        if self.items !=[]:
+            self.cost = self.getCost()
+
+    def __repr__(self):
+        return f'Bill for Table {self.table}'
+
+    def draw(self):
+        pass
+
 class Ticket:
     ticketNum = 0
     def __init__(self):
+        self.empty = True
+        self.order = []
+        self.plates = []
+        self.completedItems = []
+        self.lastProgressMade = None
+        self.ran = False
+
+    def reset(self):
         self.empty = True
         self.order = []
         self.plates = []
@@ -278,37 +324,90 @@ class Tray:
     def draw(self, width, height):
         drawOval(self.cx, self.cy, width, height, fill='steelBlue', border='black')
         for i in range(len(self.inventory)):
-            plate = self.inventory[i]
-            cy = self.cy - Plate.height*i
-            plate.cx = self.cx
-            plate.cy = cy
+            item = self.inventory[i]
+            if isinstance(item, Plate):
+                cy = self.cy - Plate.height*i
+                item.cx = self.cx
+                item.cy = cy
+
+    def pointInTray(self, x, y, width, height):
+        yRad = height/2
+        xRad = width/2
+        region = ((x-self.cx)**2)/(xRad**2) + ((y-self.cy)**2)/(yRad**2)
+        return region<=1
 
     def move(self, cx, cy):
         self.cx = cx
         self.cy = cy
 
     def contains(self, order):
+        stringInventory = [repr(item) for item in self.inventory]
         if isinstance(order, Ticket):
             for plate in order.plates:
-                if plate not in self.inventory:
+                if repr(plate) not in stringInventory:
                     return False
             return True
+        elif len(order)==1 and isinstance(order[0], str) and order[0].count('Bill')>0: # If we are looking for a bill
+            for item in stringInventory:
+                if item == order[0]: 
+                    print('its in there yuip')
+                    return True
+            return False
         else:
             for item in order:
-                if item not in self.inventory:
+                if repr(item) not in stringInventory:
                     return False
             return True
 
     def remove(self, order):
+        print('attempting removal')
+        stringInventory = [repr(item) for item in self.inventory]
         if isinstance(order, Ticket):
             for plate in order.plates:
-                if plate in self.inventory:
-                    self.inventory.remove(plate)
+                # if the plate is equiv to something in the inv, take it out then break
+                for item in self.inventory:
+                    if item.equiv(plate):
+                        self.inventory.remove(item)
+                        print('removed', item)
+                        break
+        elif len(order)==1 and isinstance(order[0], str) and order[0].count('Bill')>0: # If we are looking for a bill
+            for item in self.inventory:
+                if repr(item) == order[0]: 
+                    self.inventory.remove(item)
         else:
             for item in order:
-                if item in self.inventory:
-                    self.inventory.remove(item)
+                for item2 in self.inventory:
+                    if item2.equiv(item):
+                        self.inventory.remove(item2)
+                        print('removed', item2)
+                        break
 
+class Plate:
+    width = 800/3 - 60
+    height = 20
+    def __init__(self, item):
+        self.cx = -100
+        self.cy = -100
+        self.ready = False
+        self.item = item
+
+    def draw(self):
+        drawOval(self.cx, self.cy, Plate.width, Plate.height, fill='white', border='black')
+        if self.item != None:
+            color =  'red'
+            drawCircle(self.cx, self.cy-10, 20, fill=color)
+
+    def pointInPlate(self, x, y):
+        yRad = Plate.height/2
+        xRad = Plate.width/2
+        region = ((x-self.cx)**2)/(xRad**2) + ((y-self.cy)**2)/(yRad**2)
+        return region<=1
+
+    def __repr__(self):
+        return repr(self.item)
+
+    def equiv(self, other):
+        return isinstance(other, Plate) and self.item == other.item
 ##### END CLASSES #####
 
 def randCustomerFromBase(imageList):
@@ -494,13 +593,50 @@ def floor_redrawAll(app):
     # for i in range(len(app.waitress.imageList[app.waitress.dIndex].keypoints)):
     #     x, y = wrappedPolygonCords[i]
     #     drawCircle(x, y, 2, fill=colors[i])
-    drawLabel('X', *app.destination, size=24, fill='green')
     if app.showNodes:
         drawNodesAndEdges(app)
-    if app.pendingOrder != None:
-        print('someone wants something')
-        table, want = app.pendingOrder
-        table.demand(want)
+    if app.currentOrder !=None and app.selectedTable!=None:
+        app.tableData[app.selectedTable].demand(app.currentOrder)
+    drawHelpOverlays(app)
+
+def drawHelpOverlays(app):
+    overlayNum = 0
+    height = 200
+    width = 200
+    if app.orderToShow!=None and app.orderToShow<len(app.tableData):
+        order = app.tableData[app.orderToShow].order
+        drawRect(app.width/2, app.height/2, width, height, fill="white", 
+                border='black', align='center')
+        if order!= []:
+            dist = (height*(7/8))/len(order)
+            start = app.height/2 - height/2 + dist
+            for i in range(len(order)):
+                item = order[i]
+                drawLabel(f'{item}', app.width/2, start+dist*i)
+        else:
+            drawLabel(f'No order yet for table {app.orderToShow}', app.width/2, app.height/2)
+        overlayNum+=1
+    if app.showInventory:
+        drawRect(app.width/2, app.height/2, width, height, fill="white", 
+                border='black', align='center')
+        if app.tray.inventory != []:
+            dist = (height*(7/8))/len(app.tray.inventory)
+            start = app.height/2 - height/2 + dist
+            for i in range(len(app.tray.inventory)):
+                item = app.tray.inventory[i]
+                drawLabel(f'{item}', app.width/2, start+dist*i)
+        else:
+            drawLabel("There's nothing on your tray", app.width/2, app.height/2)
+        overlayNum+=1
+    if app.showHelp:
+        drawRect(0, 0, app.width, app.height, fill='white', opacity=80)
+        drawInstructions(app)
+
+def drawInstructions(app):
+    i = 0
+    for line in app.instructions.splitlines():
+        drawLabel(line, app.width/2, 300 + i*25, size=24, align='center')
+        i+=1
     
 def drawTables(app):
     for i in range(len(app.tableData)):
@@ -511,18 +647,28 @@ def drawTables(app):
                 drawCircle(table.cx, table.cy, table.radius+3, fill=None, border=app.colors['darkBrown'])
                 if table.lastAttended!=None and app.steps - table.lastAttended>Table.patience:
                     drawTask(app, table)
+                drawContents(app, table)
             else:
                 drawCircle(table.cx, table.cy, table.radius, fill=app.tableColor, opacity=80)
+                drawContents(app, table)
         else:
             drawCircle(table.cx, table.cy, table.radius, fill=app.tableColor)
+            drawContents(app, table)
         drawLabel(f'{table.num}', table.cx, table.cy-(table.radius/(5/4)), bold=True)
-        drawLabel(f'Status: {app.stati[table.status]}', table.cx, table.cy)
-        # draw table occupants as little circles 
-        drawOccupants(app, i)
         
+def drawContents(app, table):
+    if len(table.contents)>=table.occupants:
+        for i in range(table.occupants):
+            point = getEndpoint((180/table.maxOccupancy)*i-150, table.radius*0.3, table.cx, table.cy)
+            drawCircle(*point, 2, fill='green', border='black')
+    if len(table.contents)>=2*table.occupants:
+        for i in range(table.occupants):
+            point = getEndpoint((180/table.maxOccupancy)*i-150, table.radius*0.4, table.cx, table.cy)
+            drawCircle(*point, 10, fill='white', border='black')
+
 def drawTask(app, table):
     cx, cy = table.cx + table.radius + 20, table.cy - table.radius - 20
-    drawCircle(cx, cy, 15, fill='white', border='black')
+    drawRect(cx, cy, 100, 20, align='center', fill='white', border='black')
     drawLabel(f'{app.stati[table.status]}', cx, cy)
 
 def drawNodesAndEdges(app):
@@ -558,7 +704,7 @@ def getCordsFromDeltaPoints(cx, cy, deltaList, wrapped):
 def drawOverlay(app):
     #top bar
     drawRect(0, 0, app.width, app.barHeight, fill = app.colors['stucco'])
-    drawLabel('Press e for easy, m for medium, h for hard. Move w arrows.', 
+    drawLabel('Press tab for instructions.', 
                 app.sidebarWidth+30, app.barHeight/2, size=18, fill='white', align='left')
     zeroDig = '0' if (app.steps//20)%60<10 else ''
     drawLabel(f'{(app.steps//20)//60}:{zeroDig}{(app.steps//20)%60}', 
@@ -594,7 +740,7 @@ def drawSidebar(app):
     for i in range(len(taskList)):
         task = taskList[i]
         drawImage(button, margin, (height+margin)*i+margin+24, width=app.taskButtonWidth, height=height)
-        drawLabel(f'{task.label} to table {task.tableNum}', middle, (height+margin)*i+(height/2)+5+24, size = 24)
+        drawLabel(f'{task.label}, table {task.tableNum}', middle, (height+margin)*i+(height/2)+5+24, size = 24)
         taskNum +=1
 
 def getSortedTaskList(app):
@@ -612,7 +758,7 @@ def drawWaitress(app):
     drawImage(img, app.waitress.cx, app.waitress.cy, align='center')   
     if app.waitress.message!=None:
         cx, cy = app.waitress.cx+40, app.waitress.cy-40
-        drawRect(cx, cy, 100, 20, fill='white', border='black', align='center')
+        drawRect(cx, cy, 140, 25, fill='white', border='black', align='center')
         drawLabel(f'{app.waitress.message}', cx, cy)
     if app.waitress.dIndex!=3: 
         app.tray.draw(15, 4)
@@ -621,7 +767,7 @@ def makeNewCustomer(app):
     if not isOpenTable(app): 
         return
     newImageList = randCustomerFromBase(app.waitressImages)
-    cx, cy = app.customerOrigin
+    cx, cy = -100, -100
 
     # Choose table and get a path to that table
     tableChoice = getDestinationIndex(app)
@@ -629,7 +775,7 @@ def makeNewCustomer(app):
     destinationSet = getDestNodesFromIndex(app, tableChoice)
     path = getCustomerPathFromNodePath(app, getPathFromNodes(app, app.customerOriginNode0, destinationSet))
 
-    followerNum = random.randint(0, table.maxOccupancy)
+    followerNum = random.randint(0, table.maxOccupancy-2)
     print(table.maxOccupancy)
     table.occupants += 1+followerNum
     newCustomer = Customer(newImageList, cx, cy, 2, 2, path, table)
@@ -805,12 +951,15 @@ def floor_onKeyPress(app, key):
         Table.num = 0
         app.lineList = [(x1+app.sidebarWidth, y1, x2+ app.sidebarWidth, y2) for (x1, y1,x2,y2) in app.tempLineList]
         app.tableData = [Table(cx+app.sidebarWidth, cy, 0, 5) for (cx, cy) in app.hardLayout]
+        app.difficulty = 3
     elif key=='m':
+        app.difficulty = 2
         Table.num = 0
         app.lineList = []
         app.tableData = [Table(cx+app.sidebarWidth, cy, 0, 5) for (cx, cy) in app.midLayout]
     elif key=='e':
         Table.num = 0
+        app.difficulty = 1
         app.tableData = [Table(cx+app.sidebarWidth, cy, 0, 5) for (cx, cy) in app.easyLayout]
         app.lineList = []
     elif key=='c':
@@ -823,14 +972,36 @@ def floor_onKeyPress(app, key):
         app.selectedStartNode = None
         app.selectedEndNode = None
         app.nodesOfPath = None
+    elif key=='s':
+        # Set debugging mode
+        table = app.tableData[0]
+        table.occupants = 4
+        # Add items to order and add items to ticket
+        order = ['jelly', 'jam', 'seeds', 'funions']
+        table.order = order
+        for item in order:
+            table.ticket.addItem(item)
+            table.ticket.lastProgressMade = app.steps
+        # Add give order task to table.task
+        table.tasks.append(Task('give order', table.num))
+        table.status = 4
     elif key=='space':
         attemptTaskCompletion(app)
     elif key=='l':
         if app.customerList!=[]:
             customerLeave(app, app.customerList[0])
+    elif key=='tab':
+        app.showHelp = True
     # In case we have changed app.tableData:
     if original != app.tableData:
         layNodes(app)
+    manageHelpOverlays(app, key)
+
+def manageHelpOverlays(app, key):
+    if key.isnumeric():
+        app.orderToShow = int(key)
+    elif key == 'i':
+        app.showInventory = True
 
 def handleWaitressMovement(app, key):
     #handle waitress movement and direction facing w arrow keys
@@ -928,10 +1099,13 @@ def floor_onKeyHold(app, keys):
             handleWaitressMovement(app, z)
     if ('l' in keys) and app.editorMode:
         app.drawLine = True
-    if ('p' in keys):
+    if ('p' in keys): 
         app.findPath = True
 
 def floor_onKeyRelease(app, key):
+    app.orderToShow = None
+    app.showInventory = False
+    app.showHelp = False
     if key=='l':
         app.drawLine = False 
     if key=='p':
@@ -1161,32 +1335,31 @@ def attemptTaskCompletion(app):
 
 def equippedForTask(app, task, table):
     # If you don't need anything in your tray, you're equipped
-    if (task=='say hi' or task=='get order' or task=='get dessert order'
+    if (task=='say hi' or task=='take order' or task=='get dessert order'
         or task=='say bye (opt)'):
         return True
     # If you need something, check that you have what you need
-    if (task=='give drinks' or task=='give order' or task=='give dessert'):
+    if (task=='give drinks' or task=='give order' 
+        or task=='give dessert' or task=='give bill'):
         # Check that you have the order in your tray
         order = table.order
         if app.tray.contains(order):
             return True
-    if task=='give bill':
-        # Check that you printed the receipt and you have it
-        if app.tray.contains(table.bill):
-            return True
+    # if task=='give bill':
+    #     # Check that you printed the receipt and you have it
+    #     if app.tray.contains(table.bill):
+    #         return True
 
 def completeTask(app, task, table):
-    # ['empty','say hi', 'give drinks', 'get order', 'give order', 'get dessert order',
+    # ['empty','say hi', 'give drinks', 'take order', 'give order', 'get dessert order',
     # 'give dessert', 'give bill', 'say bye (opt)']
     if task=='say hi':
         greet(app, table)
     elif (task=='give drinks' or task=='give order' 
             or task=='give dessert' or task=='give bill'):
         deliverOrder(app, table)
-        app.tray.remove(table.order)
         # Reset order to empty
-        table.order = []
-    elif task=='get order':
+    elif task=='take order':
         getOrder(app, table)
     elif task=='get dessert order':
         getDessertOrder(app, table)
@@ -1197,46 +1370,81 @@ def greet(app, table):
     app.waitress.speak('Welcome! Want drinks?', app.steps)
     # Choose x random drinks, x = num at table, have them order it
     wants = []
+    pendingOrder = dict()
+    startTime = app.steps + 10
+    print(table.occupants)
     for i in range(table.occupants):
         drink = random.choice(app.drinks)
         wants.append(drink)
+        print(wants)
+        pendingOrder[startTime+i*app.orderTime] = drink
     # Add drinks to order
     table.order = wants
-    startTime = app.steps
-    orderTime = table.occupants * 3* 20
-    print(startTime, orderTime)
-    ### WORKING HERE! NEED BETTER TIME MANAGEMENT. APP.STEPS DOES NOT INCREMENT WHILE IN WHILE LOOP
-    # while startTime+orderTime>app.steps:
-    #     print(app.steps)
-    #     for i in range(table.occupants):
-    #         targetTime = startTime + i*3*20
-    #         if app.steps == targetTime:
-    #             print('thats the time')
-    #             app.pendingOrder = (table, wants[i])
-    #app.pendingOrder = None
-    # After they finished ordering set order to none
-    #app.pendingOrder = None
-    #table.demand(wants)
-    
-    # Add get drinks task to table.tasks
+    table.bill.addItems(wants)
+    print(pendingOrder)
+    app.pendingOrder = pendingOrder
     table.tasks.append(Task('give drinks', table.num))
 
 def getOrder(app, table):
     # Choose x random food items, x = num at table, have them order it
+    wants = []
+    pendingOrder = dict()
+    startTime = app.steps + 10
+    for i in range(table.occupants):
+        food = random.choice(app.foods)
+        wants.append(food)
+        pendingOrder[startTime+i*app.orderTime] = food
+    # Add foods to order
+    table.order = wants
+    table.bill.addItems(wants)
+    app.pendingOrder = pendingOrder
     # Add items to order and add items to ticket
+    for item in wants:
+        table.ticket.addItem(item)
+        table.ticket.lastProgressMade = app.steps
     # Add give order task to table.task
-    pass
+    table.tasks.append(Task('give order', table.num))
 
 def deliverOrder(app, table):
     # Say here you go
+    app.waitress.speak('Here ya go!', app.steps)
     # populate table with order contents
-    pass
+    table.contents += table.order
+    # Remove items from inventory
+    # for item in table.order:
+    #     if app.tray.contains(item):
+    #         print('delivering', app.tray.inventory, item)
+    #         app.tray.remove(item)
+    app.tray.remove(table.order)
+    table.order = []
+    if app.stati[table.status]=='give drinks':
+        table.tasks.append(Task('take order', table.num))
+    elif app.stati[table.status]=='give order':
+        table.tasks.append(Task('get dessert order', table.num))
+    else:
+        table.order = [f'Bill for Table {table.num}']
+        table.tasks.append(Task('give bill', table.num))
 
 def getDessertOrder(app, table):
-    # Choose x random dessert items, x = num at table, have them order it
+    # Choose x random food items, x = num at table, have them order it
+    wants = []
+    pendingOrder = dict()
+    startTime = app.steps + 10
+    for i in range(table.occupants):
+        dessert = random.choice(app.desserts)
+        wants.append(dessert)
+        pendingOrder[startTime+i*app.orderTime] = dessert
+    # Add foods to order
+    table.order = wants
+    table.bill.addItems(wants)
+    app.pendingOrder = pendingOrder
     # Add items to order and add items to ticket
-    # Add give dessert order task to table.task
-    pass
+    table.ticket.reset()
+    for item in wants:
+        table.ticket.addItem(item)
+        table.ticket.lastProgressMade = app.steps
+    # Add give order task to table.task
+    table.tasks.append(Task('give dessert', table.num))
 
 
 def alert(message):
@@ -1264,6 +1472,26 @@ def floor_onStep(app):
         if app.steps - app.waitress.startedSpeaking > 80:
             app.waitress.message = None
             app.waitress.startedSpeaking = None 
+    # Manage customer talking
+    if app.pendingOrder != None:
+        if app.steps in app.pendingOrder.keys():
+            Table.demandItem += 1
+            app.currentOrder = app.pendingOrder[app.steps]
+            print(app.currentOrder)
+        # If we're past all of the order times, kill it
+        if app.steps> max(app.pendingOrder.keys())+app.orderTime:
+            app.pendingOrder = None
+            app.currentOrder = None
+    # Have customers come regularly
+    if app.lastEntrance==None:
+        makeNewCustomer(app)
+        app.lastEntrance = app.steps
+    else:
+        # How many customers enter per 20 seconds is based on difficulty
+        entranceInterval = 20 * 20 / app.difficulty
+        if app.lastEntrance + entranceInterval < app.steps:
+            makeNewCustomer(app)
+            app.lastEntrance = app.steps
     
 def customerLeave(app, customer):
     # Get path for customer to leave
@@ -1330,6 +1558,6 @@ def getNewDirection(cx, cy, cx2, cy2):
         return None
 
 def main():
-    runAppWithScreens(initialScreen='splash', width=800, height=600)
+    runAppWithScreens(initialScreen='splash', width=900, height=600)
 
 main()

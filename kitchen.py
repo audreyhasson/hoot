@@ -2,6 +2,7 @@ try: from cmu_cs3_graphics import *
 except: from cmu_graphics import *
 
 from runAppWithScreens import *
+import random
 
 ##### CITATIONS #####
 # Checking if point is in the plates: https://math.stackexchange.com/questions/76457/check-if-a-point-is-within-an-ellipse
@@ -9,10 +10,11 @@ from runAppWithScreens import *
 ####### KITCHEN SCREEN ##################
 def kitchen_onScreenStart(app):
     app.tixBarTop = 40
-    app.itemCookTime = 200
-    app.testPlate = Plate(None)
+    app.itemCookTime = 10
 
 ######## CLASSES
+## Copied from floor???? Don't know why they wont play nice
+
 class Plate:
     width = 800/3 - 60
     height = 20
@@ -25,8 +27,7 @@ class Plate:
     def draw(self):
         drawOval(self.cx, self.cy, Plate.width, Plate.height, fill='white', border='black')
         if self.item != None:
-            if self.item == 'banana': color = 'yellow'
-            else: color = 'brown'
+            color = 'red'
             drawCircle(self.cx, self.cy-10, 20, fill=color)
 
     def pointInPlate(self, x, y):
@@ -36,7 +37,10 @@ class Plate:
         return region<=1
 
     def __repr__(self):
-        return f'plate of {self.item}'
+        return repr(self.item)
+
+    def equiv(self, other):
+        return self.item == other
 
 ######## END OF CLASSES
 
@@ -45,14 +49,46 @@ def kitchen_redrawAll(app):
     drawBackground(app)
     drawTickets(app)
     drawWaitress(app)
-    app.testPlate.draw()
+    drawHelpOverlays(app)
+    drawLabel('Press right to leave. Click plates to add them to tray.', app.width/2, 15, size=24)
+
+def drawHelpOverlays(app):
+    overlayNum = 0
+    height = 200
+    width = 200
+    if app.orderToShow!=None and app.orderToShow<len(app.tableData):
+        order = app.tableData[app.orderToShow].order
+        drawRect(app.width/2, app.height/2, width, height, fill="white", 
+                border='black', align='center')
+        if order!= []:
+            dist = (height*(7/8))/len(order)
+            start = app.height/2 - height/2 + dist
+            for i in range(len(order)):
+                item = order[i]
+                drawLabel(f'{item}', app.width/2, start+dist*i)
+        else:
+            drawLabel(f'No order yet for table {app.orderToShow}', app.width/2, app.height/2)
+        overlayNum+=1
+    if app.showInventory:
+        drawRect(app.width/2, app.height/2, width, height, fill="white", 
+                border='black', align='center')
+        if app.tray.inventory != []:
+            dist = (height*(7/8))/len(app.tray.inventory)
+            start = app.height/2 - height/2 + dist
+            for i in range(len(app.tray.inventory)):
+                item = app.tray.inventory[i]
+                drawLabel(f'{item}', app.width/2, start+dist*i)
+        else:
+            drawLabel("There's nothing on your tray", app.width/2, app.height/2)
+        overlayNum+=1
 
 def drawWaitress(app):
     img = app.waitress.imageList[1].picture
     drawImage(img, app.width-50, app.height-300, align='center', height=400, width=400, rotateAngle=-30) 
     app.tray.draw(app.width/3-40, 30)
-    for plate in app.tray.inventory:
-        plate.draw()
+    for item in app.tray.inventory:
+        if isinstance(item, Plate):
+            item.draw()
 
 def drawBackground(app):
     #countertop
@@ -80,9 +116,10 @@ def drawTickets(app):
                 # draw plates 
                 plate = ticket.plates[p]
                 cy = app.height/2 - p*(Plate.height+20)
-                plate.cx = midX
-                plate.cy = cy
-                if plate not in app.tray.inventory:
+                # if plate not in app.tray.inventory:
+                if not app.tray.contains([plate]):
+                    plate.cx = midX
+                    plate.cy = cy
                     plate.draw()
             for (label, height) in labelsAndHeights:
                 realHeight = (app.height/2)+50+height
@@ -109,18 +146,31 @@ def getTickets(app, onlyInProgress):
 def kitchen_onKeyPress(app, key):
     if key == 'right':
         setActiveScreen('floor')
+    manageHelpOverlays(app, key)
+
+def manageHelpOverlays(app, key):
+    if key.isnumeric():
+        app.orderToShow = int(key)
+    elif key == 'i':
+        app.showInventory = True
+
+def kitchen_onKeyRelease(app, key):
+    app.orderToShow = None
+    app.showInventory = False
 
 def kitchen_onMousePress(app, mouseX, mouseY):
-    if app.testPlate.pointInPlate(mouseX, mouseY):
-        # Add plate to tray inventory
-        app.tray.inventory.append(app.testPlate)
     # Check all displayed plates if they are clicked add to inventory
     tickets = getTickets(app, False)
     for ticket in tickets:
         plates = ticket.plates
         for plate in plates:
             if plate.pointInPlate(mouseX, mouseY):
+                print('adding to inv!')
+                print(plate.cx, app.tray.cx)
                 app.tray.inventory.append(plate)
+                plate.cx = app.tray.cx
+                plate.cy = app.tray.cy - len(app.tray.inventory)*Plate.height
+                print(plate.cx, plate.cy)
         # If all plates are on the tray, the ticket has been ran
         if app.tray.contains(ticket):
             ticket.ran = True

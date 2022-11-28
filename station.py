@@ -16,7 +16,7 @@ class Cup():
         self.fullness = 0
         self.zone = None
 
-    def drawCup(self, angle=0): # int, int, str, range from 0 to 1, degree (opt)
+    def draw(self, angle=0): # int, int, str, range from 0 to 1, degree (opt)
         cx, cy = self.cx, self.cy
         totalArea = Cup.bottomWidth* Cup.cupHeight + ( Cup.brimWidth- Cup.bottomWidth)* Cup.cupHeight
         topLeft = (cx -  Cup.brimWidth/2, cy -  Cup.cupHeight/2)
@@ -67,6 +67,15 @@ class Cup():
         left, right = self.cx - Cup.brimWidth/2, self.cx + Cup.brimWidth/2
         bottom, top = self.cy + Cup.cupHeight/2, self.cy - Cup.cupHeight/2
         return (left<=x<=right and top<=y<=bottom)
+    
+    def __repr__(self):
+        if self.drink!=None:
+            return repr(self.drink)
+        else:
+            return "Empty cup"
+
+    def equiv(self, other):
+        return self.drink == other
 
 ###### END OF CLASSES #####
 
@@ -77,6 +86,9 @@ def station_onScreenStart(app):
     app.cupList = [] #Contains cups that are not in cup stack
     app.cupHeld = None # index
     app.drinkHeld = None # index
+    app.trayHeight = 30
+    app.trayWidth = app.width/3 - 60
+    app.printerDims = (app.width/36, (app.height/2)-50, ((app.width/6)*(2/3)), 50)
 
 def station_redrawAll(app):
     drawRect(0,0, app.width, app.height, fill='gray')
@@ -86,26 +98,70 @@ def station_redrawAll(app):
     drawRect(0, app.height/2, app.width, app.height/2, fill=app.colors['stucco'])
     drawRect(0, app.height/2, app.width, 30, fill=app.colors['cream'])
     # Receipt printer
-    printerWidth = (app.width/6)*(2/3)
-    printerHeight = 50
-    drawRect(app.width/36, app.height/2-printerHeight, 
-            printerWidth, printerHeight, fill=app.colors['blackish'])
+    printerLeft, printerTop, printerWidth, printerHeight = app.printerDims
+    drawRect(printerLeft, printerTop, printerWidth, 
+                printerHeight, fill=app.colors['blackish'])
     drawRect(app.width/12, app.height/2-printerHeight-15, printerWidth*(2/3), 30, fill='white', align='center')
+    drawLabel('click for receipts', app.width/36, app.height/2-printerHeight+20, fill='white', align='left')
     # Tray
-    height = 30
-    width = app.width/3 - 60
-    app.tray.draw(width, height)
-    for plate in app.tray.inventory:
-        plate.draw()
+    app.tray.draw(app.trayWidth, app.trayHeight)
+    for item in app.tray.inventory:
+        if type(item)!=Cup:
+            item.draw()
     drawFountain(app)
     # Draw Cup stack
     for i in range(5):
         cup = Cup(app.width*(11/12), app.height/2-35-i*24)
-        cup.drawCup()
+        cup.draw()
     # Draw all cups
     for i in range(len(app.cupList)):
         cup = app.cupList[i]
-        cup.drawCup(180)
+        cup.draw(180)
+    # Instructions
+    drawLabel('Press left to leave. Drag cups from cupstack. Fill cups by pressing drink button.', 
+                app.width/2, app.height*(3/4), size=24)
+    drawLabel('Drag them to your tray to add them to your tray.',
+                app.width/2, app.height*(3/4)+30, size=24)
+    drawHelpOverlays(app)
+
+def drawHelpOverlays(app):
+    overlayNum = 0
+    height = 200
+    width = 200
+    if app.orderToShow!=None and app.orderToShow<len(app.tableData):
+        order = app.tableData[app.orderToShow].order
+        drawRect(app.width/2, app.height/2, width, height, fill="white", 
+                border='black', align='center')
+        if order!= []:
+            dist = (height*(7/8))/len(order)
+            start = app.height/2 - height/2 + dist
+            for i in range(len(order)):
+                item = order[i]
+                drawLabel(f'{item}', app.width/2, start+dist*i)
+        else:
+            drawLabel(f'No order yet for table {app.orderToShow}', app.width/2, app.height/2)
+        overlayNum+=1
+    if app.showInventory:
+        drawRect(app.width/2, app.height/2, width, height, fill="white", 
+                border='black', align='center')
+        if app.tray.inventory != []:
+            dist = (height*(7/8))/len(app.tray.inventory)
+            start = app.height/2 - height/2 + dist
+            for i in range(len(app.tray.inventory)):
+                item = app.tray.inventory[i]
+                drawLabel(f'{item}', app.width/2, start+dist*i)
+        else:
+            drawLabel("There's nothing on your tray", app.width/2, app.height/2)
+        overlayNum+=1
+    if app.showHelp:
+        drawRect(0, 0, app.width, app.height, fill='white', opacity=80)
+        drawInstructions(app)
+
+def drawInstructions(app):
+    i = 0
+    for line in app.instructions.splitlines():
+        drawLabel(line, app.width/2, 300 + i*25, size=24, align='center')
+        i+=1
     
 def drawFountain(app):
     leftX = app.width/2
@@ -135,6 +191,15 @@ def station_onKeyPress(app, key):
         app.testTheta -= 10
     elif key == 'c':
         cleanStation(app)
+    manageHelpOverlays(app, key)
+
+def manageHelpOverlays(app, key):
+    if key.isnumeric():
+        app.orderToShow = int(key)
+    elif key == 'i':
+        app.showInventory = True
+    elif key=='tab':
+        app.showHelp = True
 
 def cleanStation(app):
     app.cupList = []
@@ -185,6 +250,11 @@ def station_onMousePress(app, mouseX, mouseY):
                 zone = getDrinkZone(app, cup)
                 if zone !=None and zone==i:
                     cup.zone = zone
+    # Check if mouse on receipt printer
+    xStart, yStart, width, height = app.printerDims
+    if (xStart<=mouseX<=xStart+width and
+        yStart<=mouseY<=yStart+height):
+        setActiveScreen('printer')
 
 def getDrinkZone(app, cup):
     cx, cy = cup.cx, cup.cy
@@ -208,10 +278,27 @@ def station_onMouseDrag(app, mouseX, mouseY):
         cup.cx, cup.cy = mouseX, mouseY
 
 def station_onMouseRelease(app, mouseX, mouseY):
+    if app.cupHeld!=None:
+        # If it's in the tray, put in the tray inventory
+        cup = app.cupList[app.cupHeld]
+        x = cup.cx
+        y = cup.cy + (Cup.cupHeight*.5)
+        if app.tray.pointInTray(x, y, app.trayWidth, app.trayHeight) and not (cup in app.tray.inventory):
+            print('the cup is in the tray')
+            app.tray.inventory.append(cup)
+        # If it's not in the tray but it's in the inventory, remove it
+        elif not app.tray.pointInTray(x, y, app.trayWidth, app.trayHeight):
+            if cup in app.tray.inventory:
+                app.tray.inventory.remove(cup)
     app.cupHeld = None
     app.drinkHeld = None
     for cup in app.cupList:
         cup.zone = None
+
+def station_onKeyRelease(app, key):
+    app.orderToShow = None
+    app.showInventory = False
+    app.showHelp = False
 
 def getEndpoint(theta, radius, cx, cy):
     dx = radius * math.cos(math.radians(theta))
