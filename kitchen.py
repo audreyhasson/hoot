@@ -3,6 +3,9 @@ except: from cmu_graphics import *
 
 from runAppWithScreens import *
 import random
+from dependencies import *
+
+
 
 ##### CITATIONS #####
 # Checking if point is in the plates: https://math.stackexchange.com/questions/76457/check-if-a-point-is-within-an-ellipse
@@ -10,37 +13,10 @@ import random
 ####### KITCHEN SCREEN ##################
 def kitchen_onScreenStart(app):
     app.tixBarTop = 40
-    app.itemCookTime = 60
+    app.itemCookTime = 10
     app.trayX2, app.trayY2 = 780, 400
 
 ######## CLASSES
-
-class Plate:
-    width = 800/3 - 60
-    height = 20
-    def __init__(self, item):
-        self.cx = -100
-        self.cy = -100
-        self.ready = False
-        self.item = item
-
-    def draw(self):
-        drawOval(self.cx, self.cy, Plate.width, Plate.height, fill='white', border='black')
-        if self.item != None:
-            color = 'red'
-            drawCircle(self.cx, self.cy-10, 20, fill=color)
-
-    def pointInPlate(self, x, y):
-        yRad = Plate.height/2
-        xRad = Plate.width/2
-        region = ((x-self.cx)**2)/(xRad**2) + ((y-self.cy)**2)/(yRad**2)
-        return region<=1
-
-    def __repr__(self):
-        return repr(self.item)
-
-    def equiv(self, other):
-        return self.item == other
 
 ######## END OF CLASSES
 
@@ -53,59 +29,26 @@ def kitchen_redrawAll(app):
     drawHelpOverlays(app)
     drawLabel('Press right to leave. Click plates to add them to tray.', app.width/2, 15, size=24)
 
-def drawAlert(app):
-    if app.alert!=None:
-        msg = app.alert[0]
-        width = len(msg)*10 + 20
-        cx, cy = app.width/2, app.height-80 
-        drawRect(cx, cy, width, 40, align='center', fill='white', border='black')
-        drawLabel(msg, cx, cy, size = 20)
-
-def drawHelpOverlays(app):
-    overlayNum = 0
-    height = 200
-    width = 200
-    if app.orderToShow!=None and app.orderToShow<len(app.tableData):
-        order = app.tableData[app.orderToShow].order
-        drawRect(app.width/2, app.height/2, width, height, fill="white", 
-                border='black', align='center')
-        if order!= []:
-            dist = (height*(7/8))/len(order)
-            start = app.height/2 - height/2 + dist
-            for i in range(len(order)):
-                item = order[i]
-                drawLabel(f'{item}', app.width/2, start+dist*i)
-        else:
-            drawLabel(f'No order yet for table {app.orderToShow}', app.width/2, app.height/2)
-        overlayNum+=1
-    if app.showInventory:
-        drawRect(app.width/2, app.height/2, width, height, fill="white", 
-                border='black', align='center')
-        if app.tray.inventory != []:
-            dist = (height*(7/8))/len(app.tray.inventory)
-            start = app.height/2 - height/2 + dist
-            for i in range(len(app.tray.inventory)):
-                item = app.tray.inventory[i]
-                drawLabel(f'{item}', app.width/2, start+dist*i)
-        else:
-            drawLabel("There's nothing on your tray", app.width/2, app.height/2)
-        overlayNum+=1
-
 def drawWaitress(app):
     img = app.waitress.imageList[1].picture
     drawImage(img, app.width-50, app.height-300, align='center', height=400, width=400, rotateAngle=-30) 
     app.tray.cx, app.tray.cy = app.trayX2, app.trayY2
     app.tray.draw(app.width/3-40, 30)
+    p = 0
     for item in app.tray.inventory:
         if isinstance(item, Plate):
+            p +=1
+            item.cy = app.tray.cy - p*Plate.height + Plate.height
             item.draw()
+    pass
 
 def drawBackground(app):
-    #countertop
-    drawRect(0, app.height/2, app.width*(2/3), app.height/2, fill=app.colors['stucco'])
-    drawRect(0, app.height/2, app.width*(2/3)+40, 30, fill=app.colors['cream'])
-    # top bar
-    drawRect(0, app.tixBarTop, app.width, 10, fill=app.colors['blackish'])
+    # #countertop
+    # drawRect(0, app.height/2, app.width*(2/3), app.height/2, fill=app.colors['stucco'])
+    # drawRect(0, app.height/2, app.width*(2/3)+40, 30, fill=app.colors['cream'])
+    # # top bar
+    # drawRect(0, app.tixBarTop, app.width, 10, fill=app.colors['blackish'])
+    drawImage(app.kitchenBackground, 0, 0)
 
 def drawTickets(app):
     tickets = getTickets(app, False)
@@ -161,18 +104,10 @@ def kitchen_onKeyPress(app, key):
         print(app.tray.cx, app.tray.cy)
     manageHelpOverlays(app, key)
 
-def manageHelpOverlays(app, key):
-    if key.isnumeric():
-        app.orderToShow = int(key)
-    elif key == 'i':
-        app.showInventory = True
-
 def kitchen_onKeyRelease(app, key):
     app.orderToShow = None
     app.showInventory = False
-
-def alert(app, message):
-    app.alert = (message, app.steps)
+    app.showHelp = False
 
 def kitchen_onMousePress(app, mouseX, mouseY):
     # Check all displayed plates if they are clicked add to inventory
@@ -181,13 +116,16 @@ def kitchen_onMousePress(app, mouseX, mouseY):
         plates = ticket.plates
         for plate in plates:
             if plate.pointInPlate(mouseX, mouseY):
-                alert(app, f'{plate.item} added to tray')
-                app.tray.inventory.append(plate)
-                plate.cx = app.tray.cx
-                plate.cy = app.tray.cy - len(app.tray.inventory)*Plate.height
-                print(plate.cx, plate.cy)
+                if ticket.isFinished():
+                    alert(app, f'{plate.item} added to tray')
+                    app.tray.inventory.append(plate)
+                    plate.cx = app.tray.cx
+                    plate.cy = app.tray.cy
+                else:
+                    alert(app, "The order isn't ready!")
         # If all plates are on the tray, the ticket has been ran
-        if app.tray.contains(ticket):
+        if app.tray.contains(plates):
+            print("yep they're all in there")
             ticket.ran = True
 
 def kitchen_onStep(app):

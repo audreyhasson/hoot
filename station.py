@@ -3,81 +3,7 @@ except: from cmu_graphics import *
 
 from runAppWithScreens import *
 import math
-
-##### CLASSES ###########
-class Cup():
-    brimWidth = 50
-    bottomWidth = brimWidth - 15
-    cupHeight = 70
-    def __init__(self, cx, cy):
-        self.cx = cx
-        self.cy = cy
-        self.drink = None
-        self.fullness = 0
-        self.zone = None
-
-    def draw(self, angle=0): # int, int, str, range from 0 to 1, degree (opt)
-        cx, cy = self.cx, self.cy
-        totalArea = Cup.bottomWidth* Cup.cupHeight + ( Cup.brimWidth- Cup.bottomWidth)* Cup.cupHeight
-        topLeft = (cx -  Cup.brimWidth/2, cy -  Cup.cupHeight/2)
-        topRight = (cx +  Cup.brimWidth/2, cy -  Cup.cupHeight/2)
-        bottomLeft =  (cx -  Cup.bottomWidth/2, cy +  Cup.cupHeight/2)
-        bottomRight = (cx +  Cup.bottomWidth/2, cy +  Cup.cupHeight/2)
-
-        # Get new points after rotation applied
-        bottomRight, bottomLeft = self.getRotatedPoints(bottomRight, bottomLeft, angle)
-        topLeft, topRight = self.getRotatedPoints(topLeft, topRight, angle)
-
-        for i in range(1, 5):
-            startpoint = [topLeft, bottomLeft, bottomRight, topRight, topLeft][i]
-            endpoint = [topLeft, bottomLeft, bottomRight, topRight, topLeft][i-1]
-            drawLine(*startpoint, *endpoint, fill='black')
-    
-        if self.drink!=None and angle==180:
-            color = getDrinkColor(self.drink)
-            drinkTopLeft = (bottomLeft[0] - (( Cup.brimWidth- Cup.bottomWidth)/2)*self.fullness,
-                            bottomLeft[1] -  Cup.cupHeight*self.fullness)
-            drinkTopRight = (bottomRight[0] + ((Cup.brimWidth-Cup.bottomWidth)/2)*self.fullness,
-                            bottomRight[1] - Cup.cupHeight*self.fullness)
-            drawPolygon(*drinkTopLeft, *drinkTopRight, *bottomRight, *bottomLeft, fill=color)
-                            
-    def getRotatedPoints(self, leadingPoint, followingPoint, angle):
-        cx, cy  = self.cx, self.cy
-        # Steps for responsive rotation:
-        # First point clockwise is leader, second point is always the same angle away from leader
-        inTop = inTopHalf(cx, cy, *leadingPoint)
-        addition = 180 if inTop else 0
-        startAngle = math.degrees(getThetaFromEndpoint(cx, cy, *leadingPoint))
-        angleBetween = 180 + math.degrees(getThetaFromEndpoint(cx, cy, *followingPoint)) - startAngle
-        startAngle += addition
-        # Get distance from cx to bottom right
-        radius = distance(cx, cy, *leadingPoint)
-        # Get new leading point using rotateAngle + OG angle
-        newLeadingPoint = getEndpoint(startAngle+angle, radius, cx, cy)
-        # Get new following point using rotateAngle + OG angle + following angle
-        newFollowingPoint = getEndpoint(startAngle+angle+angleBetween, radius, cx, cy)
-        return newLeadingPoint, newFollowingPoint
-    
-    def fillCup(self, drink):
-        self.drink = drink
-        if self.fullness <1:
-            self.fullness += .01
-    
-    def pointInCup(self, x, y):
-        left, right = self.cx - Cup.brimWidth/2, self.cx + Cup.brimWidth/2
-        bottom, top = self.cy + Cup.cupHeight/2, self.cy - Cup.cupHeight/2
-        return (left<=x<=right and top<=y<=bottom)
-    
-    def __repr__(self):
-        if self.drink!=None:
-            return repr(self.drink)
-        else:
-            return "Empty cup"
-
-    def equiv(self, other):
-        return self.drink == other
-
-###### END OF CLASSES #####
+from dependencies import *
 
 ####### SERVER STATION SCREEN ##################
 def station_onScreenStart(app):
@@ -90,6 +16,7 @@ def station_onScreenStart(app):
     app.trayWidth = app.width/3 - 60
     app.printerDims = (app.width/36, (app.height/2)-50, ((app.width/6)*(2/3)), 50)
     app.trayX, app.trayY = app.width/3, app.height/2
+    
 
 def station_redrawAll(app):
     drawRect(0,0, app.width, app.height, fill='gray')
@@ -134,48 +61,6 @@ def drawAlert(app):
         cx, cy = app.width/2, app.height-80 
         drawRect(cx, cy, width, 40, align='center', fill='white', border='black')
         drawLabel(msg, cx, cy, size = 20)
-
-def alert(app, message):
-    app.alert = (message, app.steps)
-
-def drawHelpOverlays(app):
-    overlayNum = 0
-    height = 200
-    width = 200
-    if app.orderToShow!=None and app.orderToShow<len(app.tableData):
-        order = app.tableData[app.orderToShow].order
-        drawRect(app.width/2, app.height/2, width, height, fill="white", 
-                border='black', align='center')
-        if order!= []:
-            dist = (height*(7/8))/len(order)
-            start = app.height/2 - height/2 + dist
-            for i in range(len(order)):
-                item = order[i]
-                drawLabel(f'{item}', app.width/2, start+dist*i)
-        else:
-            drawLabel(f'No order yet for table {app.orderToShow}', app.width/2, app.height/2)
-        overlayNum+=1
-    if app.showInventory:
-        drawRect(app.width/2, app.height/2, width, height, fill="white", 
-                border='black', align='center')
-        if app.tray.inventory != []:
-            dist = (height*(7/8))/len(app.tray.inventory)
-            start = app.height/2 - height/2 + dist
-            for i in range(len(app.tray.inventory)):
-                item = app.tray.inventory[i]
-                drawLabel(f'{item}', app.width/2, start+dist*i)
-        else:
-            drawLabel("There's nothing on your tray", app.width/2, app.height/2)
-        overlayNum+=1
-    if app.showHelp:
-        drawRect(0, 0, app.width, app.height, fill='white', opacity=80)
-        drawInstructions(app)
-
-def drawInstructions(app):
-    i = 0
-    for line in app.instructions.splitlines():
-        drawLabel(line, app.width/2, 300 + i*25, size=24, align='center')
-        i+=1
     
 def drawFountain(app):
     leftX = app.width/2
@@ -185,9 +70,9 @@ def drawFountain(app):
     margin = 15
     innerWidth = width - margin*2
     drinkWidth = 60
-    drinkDist = innerWidth / len(app.drinks)
-    for i in range(len(app.drinks)):
-        drink = app.drinks[i]
+    drinkDist = innerWidth / len(app.drinkLabels)
+    for i in range(len(app.drinkLabels)):
+        drink = app.drinkLabels[i]
         midX = margin + drinkDist*i + drinkWidth/2 + app.width/2
         if app.drinkHeld!=None and i == app.drinkHeld:
             gushWidth = 10
@@ -224,8 +109,8 @@ def station_onStep(app):
         app.steps +=1
     for cup in app.cupList:
         if cup.zone!=None:
-            if cup.drink==None or cup.drink==app.drinks[cup.zone]:
-                cup.fillCup(app.drinks[cup.zone])
+            if cup.drink==None or cup.drink==app.drinkLabels[cup.zone]:
+                cup.fillCup(app.drinkLabels[cup.zone])
     # Take away alert if past time
     if app.alert!=None:
         alertStart = app.alert[1]
@@ -256,8 +141,8 @@ def station_onMousePress(app, mouseX, mouseY):
     margin = 15
     innerWidth = width - margin*2
     drinkWidth = 60
-    drinkDist = innerWidth / len(app.drinks)
-    for i in range(len(app.drinks)):
+    drinkDist = innerWidth / len(app.drinkLabels)
+    for i in range(len(app.drinkLabels)):
         # width is drinkWidth, height is 30
         left = margin+drinkDist*i + app.width/2
         right = left+drinkWidth
@@ -285,8 +170,8 @@ def getDrinkZone(app, cup):
     # Otherwise look for zones
     margin = 15
     innerWidth = app.width/3 - margin*2
-    zoneWidth = innerWidth / len(app.drinks)
-    for i in range(len(app.drinks)):
+    zoneWidth = innerWidth / len(app.drinkLabels)
+    for i in range(len(app.drinkLabels)):
         zoneStart = app.width/2 + margin + zoneWidth*i
         zoneEnd = app.width/2 + margin + zoneWidth*(i+1)
         if zoneStart<=cx<=zoneEnd:
@@ -335,14 +220,6 @@ def getThetaFromEndpoint(cx, cy, x, y):
 
 def inTopHalf(cx, cy, x, y):
     return y > cy
-
-def getDrinkColor(drink):
-    if drink=='Coke':
-        return rgb(74, 28, 8)
-    if drink=='Water':
-        return rgb(65, 144, 181)
-    if drink=='Lemonade':
-        return rgb(201, 197, 111)
 
 def distance(x, y, x1, y1):
     return ((x1-x)**2 +(y1-y)**2)**.5

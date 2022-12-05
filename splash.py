@@ -2,6 +2,8 @@ try: from cmu_cs3_graphics import *
 except: from cmu_graphics import *
 
 from runAppWithScreens import *
+from dependencies import *
+
 
 ######## SPLASH SCREEN ##########
 def splash_onScreenStart(app):

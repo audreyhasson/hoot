@@ -2,6 +2,8 @@ try: from cmu_cs3_graphics import *
 except: from cmu_graphics import *
 
 from runAppWithScreens import *
+from dependencies import *
+
 
 def printer_onScreenStart(app):
     app.tableToShow = 1
@@ -47,7 +49,7 @@ def drawBill(app):
         thisStart = start + dist*i
         item = items[i]
         drawLabel(f'{item}', app.width*(3/4), thisStart)
-    total = table.bill.cost
+    total = table.bill.getCost(app.menu)
     drawLabel(f'Total is {total}', app.width*(3/4), app.height-100)
     drawLabel('Press enter to add this receipt to your tray', app.width*(3/4), app.height-50)
 
@@ -107,3 +109,4 @@ def printer_onStep(app):
 
 def printer_onKeyRelease(app, key):
     app.showInventory = False
+    app.showHelp = False
