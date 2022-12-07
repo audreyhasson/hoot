@@ -25,12 +25,13 @@ def kitchen_redrawAll(app):
     drawBackground(app)
     drawTickets(app)
     drawWaitress(app)
+    drawImage(app.rightKey, app.width-100, app.height-80, width=70, height=70)
     drawAlert(app)
     drawHelpOverlays(app)
     drawLabel('Press right to leave. Click plates to add them to tray.', app.width/2, 15, size=24)
 
 def drawWaitress(app):
-    img = app.waitress.imageList[1].picture
+    img = CMUImage(Image.open('images/kitchenWaitress.png'))
     drawImage(img, app.width-50, app.height-300, align='center', height=400, width=400, rotateAngle=-30) 
     app.tray.cx, app.tray.cy = app.trayX2, app.trayY2
     app.tray.draw(app.width/3-40, 30)
@@ -38,7 +39,7 @@ def drawWaitress(app):
     for item in app.tray.inventory:
         if isinstance(item, Plate):
             p +=1
-            item.cy = app.tray.cy - p*Plate.height + Plate.height
+            item.cy = app.tray.cy - p*Plate.height 
             item.draw()
     pass
 

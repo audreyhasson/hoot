@@ -16,9 +16,11 @@ class DynamicImage:
         self.keypoints = keypoints
         self.walkingPictures = pictures[1:]
         self.walkIndex = 0
+        self.ticks = 0
 
     def walk(self):
-        if self.walkingPictures!=[]:
+        self.ticks += 1
+        if self.walkingPictures!=[] and self.ticks%5==0:
             self.picture = self.walkingPictures[self.walkIndex]
             self.walkIndex = (self.walkIndex+1)%2
     
@@ -45,6 +47,7 @@ class Customer(Sprite):
         self.seated = False
         self.table = table
         self.followers = []
+        self.angle = 0
 
     def addFollowers(self, app, numOfFollowers):
         for i in range(numOfFollowers):
@@ -58,6 +61,7 @@ class Customer(Sprite):
     def move(self, app):
         # Only move if not seated
         if not self.seated and self.path!=[]:
+            self.angle = 0
             self.lastDIndex = self.dIndex
             # get next direction from path
             cx, cy = self.path.pop(0)
@@ -65,17 +69,21 @@ class Customer(Sprite):
             if newDirection!= None:
                 self.dIndex = newDirection
             self.cx = cx
-            self.cy = cy       
+            self.cy = cy  
+            self.imageList[self.dIndex].walk()    
         if self.path == [] and not self.seated and self.table!=None:
+            self.table.tip = None
             # Jump to an open seat
             seatedPos = None
             self.dIndex = 1
+            self.imageList[self.dIndex].stop()
             for seat in self.table.seats:
                 if not seat[1]: # if no one is sitting there
                     seatedPos = seat[0]
                     self.cx, self.cy = seatedPos[0], seatedPos[1]
                     seat[1] = True
                     self.seated = True
+                    self.angle = getAngle(*seatedPos, self.table.cx, self.table.cy)
                     if self.table.status==0: 
                         self.table.addTask('say hi')
                         self.table.status = 1
@@ -94,10 +102,11 @@ class Customer(Sprite):
                 waitress.cy = newy
 
     def draw(self):
-        # Note the given images are twice the size that i want them to display
         img = self.imageList[self.dIndex].picture
-        drawImage(img, self.cx, self.cy, align='center',
-                 width=img.image.width/2, height=img.image.width/2)
+        drawImage(img, self.cx, self.cy, align='center', rotateAngle=self.angle,)
+
+    def __lt__(self, other):
+        return self.cy < other.cy
 
 class Waitress(Sprite):
     def __init__(self, imageList, cx, cy, dIndex, lastDIndex):
@@ -113,13 +122,15 @@ class Waitress(Sprite):
 
     def draw(self):
         img = self.imageList[self.dIndex].picture
-        drawImage(img, self.cx, self.cy, align='center', width=49, height=51)
+        drawImage(img, self.cx, self.cy, align='center')
 
 class Table():
     # [[coords], occupants, maxOccupancy]
     num = 0
     patience = 50
     demandItem = 0
+    speechBubbles = [CMUImage(Image.open('images/speechBubbleBlue.png')), 
+                CMUImage(Image.open('images/speechBubbleGreen.png'))]
     def __init__(self, cx, cy, occupants, maxOccupancy, radius=30):
         self.cx = cx
         self.cy = cy
@@ -138,7 +149,7 @@ class Table():
         Table.num += 1
         self.tip = None
         self.serverScore = 100
-        self.seats = [[getEndpoint((180/self.maxOccupancy)*p-150, self.radius, self.cx, self.cy), False] for p in range(4)]
+        self.seats = [[getEndpoint((180/self.maxOccupancy)*p-150, self.radius+10, self.cx, self.cy), False] for p in range(4)]
 
     def __eq__(self, other):
         return (isinstance(other, Table) and self.cx==other.cx and 
@@ -154,7 +165,8 @@ class Table():
         cx = self.cx + 2*self.radius
         cy = self.cy - 2*self.radius
         color = 'lightGreen' if Table.demandItem%2 == 0 else 'steelBlue'
-        drawRect(cx, cy, 100, 40, align='center', fill=color, border='black')
+        #drawRect(cx, cy, 100, 40, align='center', fill=color, border='black')
+        drawImage(Table.speechBubbles[(Table.demandItem%2)], cx, cy, align='center')
         drawLabel(f'{item}', cx, cy)
 
     def addTask(self, task):
@@ -163,12 +175,12 @@ class Table():
     def calculateTip(self, menu, waitress):
         # drink fullness was already accounted for
         averageTimeAttended = int((sum(self.waitTimes)/len(self.waitTimes))/20) # int in seconds
-        if averageTimeAttended > 10:
+        if averageTimeAttended > 20:
             # Deduct some points for being a slowpoke
-            self.serverScore -= (averageTimeAttended - 10)
+            self.serverScore -= .5*(averageTimeAttended - 10)
         if self.serverScore<0: self.serverScore = 1
         # Account for general silliness 
-        self.serverScore *= (waitress.score/100)
+        self.serverScore *= abs((waitress.score/100))
         return ((self.bill.getCost(menu)*.002*self.serverScore)*100)/100
 
 class Bill:
@@ -253,6 +265,7 @@ class Task:
         return self.priority < other.priority
 
 class Tray:
+    img = CMUImage(Image.open('images/tray.png'))
     def __init__(self, cx, cy):
         self.cx = cx
         self.cy = cy
@@ -260,7 +273,8 @@ class Tray:
         self.capacity = 5
 
     def draw(self, width, height):
-        drawOval(self.cx, self.cy, width, height, fill='steelBlue', border='black')
+        #drawOval(self.cx, self.cy, width, height, fill='steelBlue', border='black')
+        drawImage(Tray.img, self.cx, self.cy, align='center', width=width, height=height)
         for i in range(len(self.inventory)):
             item = self.inventory[i]
             p = 0
@@ -284,7 +298,6 @@ class Tray:
         matchingItems = 0
         for item in order:
             if isinstance(item, str):
-                print('checking for', item, 'in', self.inventory)
                 for inventoryItem in self.inventory:
                     if repr(inventoryItem)==repr(item):
                         matchingItems +=1
@@ -299,10 +312,8 @@ class Tray:
 
     def remove(self, order):
         scoreChange = 0
-        print('attempting removal')
         for item in order:
             if isinstance(item, str):
-                print('checking for', item, 'in', self.inventory)
                 for inventoryItem in self.inventory:
                     if repr(inventoryItem)==repr(item):
                         self.inventory.remove(inventoryItem)
@@ -316,8 +327,15 @@ class Tray:
         return scoreChange
 
 class Plate:
-    width = 800/3 - 60
-    height = 20
+    plateImages = {
+        'rat': CMUImage(Image.open('images/rat.png')),
+        'frog': CMUImage(Image.open('images/frog.png')),
+        'worm': CMUImage(Image.open('images/worm.png')),
+        'fish': CMUImage(Image.open('images/fish.png')),
+    }
+    sampleImg = plateImages['fish']
+    width = sampleImg.image.width * 3
+    height = sampleImg.image.height
     id = 0
     def __init__(self, item):
         self.cx = -100
@@ -328,10 +346,14 @@ class Plate:
         Plate.id +=1
 
     def draw(self):
-        drawOval(self.cx, self.cy, Plate.width, Plate.height, fill='white', border='black')
-        if self.item != None:
-            color =  'red'
-            drawCircle(self.cx, self.cy-10, 20, fill=color)
+        img = Plate.plateImages[self.item]
+        width = img.image.width * 3
+        height = img.image.height* 3
+        #drawOval(self.cx, self.cy, Plate.width, Plate.height, fill='white', border='black')
+        drawImage(img, self.cx, self.cy, align='center', width=width, height=height)
+        # if self.item != None:
+        #     color =  'red'
+        #     drawCircle(self.cx, self.cy-10, 20, fill=color)
 
     def pointInPlate(self, x, y):
         yRad = Plate.height/2
@@ -427,6 +449,16 @@ class Cup():
 
 ##### FUNCTIONS ####
 
+def getAngle(posx, posy, x, y):
+    angleFromOrigin = getThetaFromEndpoint(posx, posy, x, y)
+    if angleFromOrigin>0:
+        theta = math.pi - angleFromOrigin + .5*math.pi
+        return .2*math.degrees(math.pi - theta)
+    else:
+        theta = abs(angleFromOrigin)
+        return .2*math.degrees(.5*math.pi - theta)
+
+
 # ALL MOVE FUNCTIONS!
 
 # Takes in cx, cy, dIndex, last Dindex, returns new cx, cy
@@ -448,7 +480,7 @@ def tryOrientation(app, cx, cy, imageList, dIndex, lastDIndex):
 # Returns new cx, cy
 def tryMove(app, cx, cy, dx, dy, imageList, dIndex, lastDIndex, spriteType):
     # check to see if switching the picture already made things illegal and adj
-    cx, cy = tryOrientation(app, cx, cy, imageList, dIndex, lastDIndex)
+    # cx, cy = tryOrientation(app, cx, cy, imageList, dIndex, lastDIndex)
     # move
     cx += dx*app.jumpDist
     cy += dy*app.jumpDist
@@ -554,7 +586,7 @@ def polygonPolygonIntersection(object, subject, subjectLines):
 
 def handleCrash(app):
     alert(app, 'Yikes, you just ran into someone!')
-    app.waitress.score -= 1
+    app.waitress.score -= .05
 
 # Takes (cx, cy), radius, imageList, dIndex
 def hitTable(app, object, imageList, dIndex, givenRadius):
@@ -663,6 +695,8 @@ def getDrinkColor(drink):
         return rgb(65, 144, 181)
     if drink=='Lemonade':
         return rgb(201, 197, 111)
+    if drink=='Sprite':
+        return 'white'
     else:
         return 'purple'
 
@@ -713,6 +747,122 @@ def getEndpoint(theta, radius, cx, cy):
     dy = radius * math.sin(math.radians(theta))
     return cx+dx, cy+dy
 
+
+def layNodes(app):
+    # If there are no tables, don't proceed
+    if app.tableData == []: 
+        return
+    validNodes = []
+    # Lay nodes around each table at 4 points
+    for i in range(len(app.tableData)):
+        table = app.tableData[i]
+        #cx, cy = table[0][0], table[0][1]
+        id1, id2, id3, id4 = [(0,i*4+q) for q in range(4)]
+        pos1, pos2, pos3, pos4 = [getEndpoint((180/table.maxOccupancy)*p-150, table.radius+10, table.cx, table.cy) for p in range(4)]
+        validNodes.extend([(*pos1, id1), 
+                            (*pos2, id2),
+                            (*pos3, id3), 
+                            (*pos4, id4)])
+    # Get list of cx,cy of every node based on dimensions of board and dist btwn nodes
+    margin = 40
+    wallHeight = 10 
+    boardTopLeft = margin+app.sidebarWidth, app.barHeight+margin+wallHeight
+    boardWidth = app.width - 2*margin - app.sidebarWidth
+    boardHeight = app.height - app.barHeight - 2*margin
+    nodeDist = app.nodeDist
+    possibleNodes = getPossibleNodes(boardTopLeft, boardWidth, boardHeight, nodeDist)
+    # Loop through list of cx,cy and add them to the node list if they are legal positions
+    i = 0
+    testImageList = app.waitress.imageList
+    while i<len(possibleNodes):
+        cx, cy, id = possibleNodes[i]
+        if not isLegalMove(app, cx, cy, testImageList, 1, None):
+            possibleNodes.pop(i)
+        else: i+=1
+    # Note customer origin node must always be a valid node! That will be in table lay rules.
+    app.nodeList = [app.customerOriginNode0] + [app.customerOriginNode1]+ validNodes + possibleNodes
+    layEdges(app)
+
+def getPossibleNodes(boardTopLeft, boardWidth, boardHeight, nodeDist):
+    res = []
+    startx, starty = boardTopLeft
+    cols = math.ceil(boardWidth /nodeDist) +1
+    rows = math.ceil(boardHeight /nodeDist) +1
+    for row in range(rows):
+        for col in range(cols):
+            cx = startx + col*nodeDist
+            cy = starty + row*nodeDist
+            id = (row+1, col+1) # skips 0 case because 0 is for special nodes
+            res += [(cx, cy, id)]
+    return res
+
+def layEdges(app):
+    # Tolerance = how far away the nodes will be and still connect
+    tolerance = app.tolerance
+    edgeSet = set()
+    possibleEdges = getPossibleEdges(app, tolerance)
+    for edge in possibleEdges:
+        startNode = edge[0], edge[1]
+        endNode = edge[2], edge[3]
+        if (isSafePath(app, startNode, endNode)  
+            and isSafePath(app, endNode, startNode)):
+            length = distance(*startNode, *endNode)
+            weight = (10*length // tolerance)
+            edgeSet.add((edge, weight))
+    # add critical "unsafe" line from exit to entrance
+    x1, y1 = app.customerOriginNode0[0], app.customerOriginNode0[1]
+    x2, y2 = app.customerOriginNode1[0], app.customerOriginNode1[1]
+    weight = weight = (10*distance(x1, y1, x2, y2) // tolerance)
+    edgeSet.add(((x1, y1, x2, y2), weight))
+    app.edgeSet = edgeSet
+
+def isSafePath(app, startPoint, endPoint):
+    # Cannot cross any lines
+    # Tbc: Customer cannot cross lines when on this line, therefore we will
+    #  project lines on either side of this line, one radius away, and check
+    # if they intersect
+    x, y, x2, y2 = startPoint[0], startPoint[1], endPoint[0], endPoint[1]
+    dx, dy = abs(x2-x), abs(y2-y)
+    if dx>dy:
+        topLine = x, y+app.maxSpriteWidth, x2, y2+app.maxSpriteWidth
+        bottomLine = x, y-app.maxSpriteWidth, x2, y2-app.maxSpriteWidth
+    else:
+        topLine = x+app.maxSpriteWidth, y, x2+app.maxSpriteWidth, y2
+        bottomLine = x-app.maxSpriteWidth, y, x2-app.maxSpriteWidth, y2
+    for line1 in app.lineList:
+        #line2 = (startPoint[0], startPoint[1], endPoint[0], endPoint[1])
+        if segmentsIntersect(line1, topLine)!=None:
+            return False
+        if segmentsIntersect(line1, bottomLine)!=None:
+            return False
+    # Cannot intersect any tables
+    for table in app.tableData:
+        if tableNearLine(app, (table.cx, table.cy), startPoint, endPoint):
+            return False
+    return True
+    
+def tableNearLine(app, tableCords, startPoint, endPoint):
+    # Increasing tolerance increases how close a line can be to a table
+    tolerance = 10
+    cx, cy = tableCords[0], tableCords[1]
+    startx, starty = startPoint
+    endx, endy = endPoint
+    midx = (startx+endx)/2
+    midy = (starty+endy)/2
+    radius = .5*distance(*startPoint, *endPoint)
+    # Check if circle surrounding two lines includes the table
+    return  (radius+app.tableR-tolerance>distance(cx, cy, midx, midy))
+
+def getPossibleEdges(app, tolerance):
+    edgeSet = set()
+    for node in app.nodeList:
+        cx, cy, id = node
+        for node in app.nodeList:
+            cx2, cy2, id2 = node
+            if id!=id2 and not (id[0]==0 and id2[0]==0):      #skips double point and tablenode-to-tablenode
+                if distance(cx, cy, cx2, cy2)<=tolerance:
+                    edgeSet.add((cx, cy, cx2, cy2))
+    return edgeSet
 
 def randCustomerFromBase(imageList):
     newImageList = []

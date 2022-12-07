@@ -21,6 +21,7 @@ def printer_redrawAll(app):
         drawLabel(f'Table {table.num}', app.width/4, thisStart)
     if app.tableToShow!=None:
         drawBill(app)
+    drawImage(app.leftKey, 40, app.height-100, width=70, height=70)
     drawAlert(app)
     drawLabel('Press left to go back', app.width/4, app.height-50, size=20)
     drawHelpOverlays(app)

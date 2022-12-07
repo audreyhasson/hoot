@@ -14,14 +14,11 @@ def splash_onScreenStart(app):
     Get drinks and bills from drink area
     Get food orders from kitchen
     Press number to view that table's order
-    Don't run into customers! You will be sent to the corner
     '''
+    app.splashScreenImg = CMUImage(Image.open('images/splashPic.png'))
 
 def splash_redrawAll(app):
-    drawRect(0,0, app.width, app.height, fill=app.colors['stucco'])
-    drawLabel('HOOTERS', app.width/2, app.height/2-app.height/5, size=100)
-    drawLabel('press space to start!', app.width/2, app.height-100, size=24)
-    drawInstructions(app)
+    drawImage(app.splashScreenImg, 0,0)
 
 def drawInstructions(app):
     i = 0
@@ -31,4 +28,16 @@ def drawInstructions(app):
 
 def splash_onKeyPress(app, key):
     if key=='space':
-        setActiveScreen('floor')
+        setActiveScreen('tutorial')
+
+def splash_onMousePress(app, mouseX, mouseY):
+    # Check if clicked play button
+    buttonLeft1 = 71
+    buttonTop = 68
+    buttonLeft2 = 616
+    buttonWidth = 218
+    buttonHeight = 115
+    if ((buttonLeft1 <= mouseX <= buttonLeft1+buttonWidth or
+        buttonLeft2 <= mouseX <= buttonLeft2+buttonWidth) and
+        buttonTop <= mouseY <= buttonTop+buttonHeight):
+        setActiveScreen('tutorial')

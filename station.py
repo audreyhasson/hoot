@@ -20,17 +20,17 @@ def station_onScreenStart(app):
 
 def station_redrawAll(app):
     drawRect(0,0, app.width, app.height, fill='gray')
-    drawLabel('ur in da server station', app.width/2, app.height/2-app.height/5, size=80)
     drawLabel('press left to get to floor', app.width/2, app.height/2+app.height/5, size=35)
     # Countertop
-    drawRect(0, app.height/2, app.width, app.height/2, fill=app.colors['stucco'])
-    drawRect(0, app.height/2, app.width, 30, fill=app.colors['cream'])
+    drawRect(0, app.height/2, app.width, app.height/2, fill=rgb(219,198,186))
+    drawRect(-10, app.height/2, app.width+20
+    , 30, fill=rgb(106,77,61), border=rgb(76, 49, 34))
     # Receipt printer
     printerLeft, printerTop, printerWidth, printerHeight = app.printerDims
     drawRect(printerLeft, printerTop, printerWidth, 
                 printerHeight, fill=app.colors['blackish'])
     drawRect(app.width/12, app.height/2-printerHeight-15, printerWidth*(2/3), 30, fill='white', align='center')
-    drawLabel('click for receipts', app.width/36, app.height/2-printerHeight+20, fill='white', align='left')
+    drawLabel('click for receipts', app.width/36+5, app.height/2-printerHeight+20, fill='white', align='left')
     # Tray
     app.tray.cx, app.tray.cy = app.trayX, app.trayY
     app.tray.draw(app.trayWidth, app.trayHeight)
@@ -51,6 +51,7 @@ def station_redrawAll(app):
                 app.width/2, app.height*(3/4), size=24)
     drawLabel('Drag them to your tray to add them to your tray.',
                 app.width/2, app.height*(3/4)+30, size=24)
+    drawImage(app.leftKey, 40, app.height-100, width=70, height=70)
     drawAlert(app)
     drawHelpOverlays(app)
 
@@ -69,7 +70,7 @@ def drawFountain(app):
     drawRect(leftX, 0, width, height, fill=app.colors['blackish'])
     margin = 15
     innerWidth = width - margin*2
-    drinkWidth = 60
+    drinkWidth = 65
     drinkDist = innerWidth / len(app.drinkLabels)
     for i in range(len(app.drinkLabels)):
         drink = app.drinkLabels[i]
@@ -78,7 +79,7 @@ def drawFountain(app):
             gushWidth = 10
             drawRect(midX-gushWidth/2, app.height/4, gushWidth, 
                     app.height/4-Cup.cupHeight, fill=getDrinkColor(drink))
-        drawRect(midX, app.height/4, drinkWidth, 30, align='center', fill=app.colors['stucco'])
+        drawRect(midX, app.height/4, drinkWidth, 30, align='center', fill=rgb(219,198,186), border=rgb(76,49,34))
         drawLabel(f'{drink}', midX, app.height/4)
         
 def station_onKeyPress(app, key):
@@ -140,7 +141,7 @@ def station_onMousePress(app, mouseX, mouseY):
     width = app.width/3
     margin = 15
     innerWidth = width - margin*2
-    drinkWidth = 60
+    drinkWidth = 65
     drinkDist = innerWidth / len(app.drinkLabels)
     for i in range(len(app.drinkLabels)):
         # width is drinkWidth, height is 30
