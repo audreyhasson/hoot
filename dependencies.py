@@ -296,14 +296,16 @@ class Tray:
 
     def contains(self, order):
         matchingItems = 0
+        inventoryCopy = copy.deepcopy(self.inventory)
         for item in order:
             if isinstance(item, str):
-                for inventoryItem in self.inventory:
+                for inventoryItem in inventoryCopy:
                     if repr(inventoryItem)==repr(item):
                         matchingItems +=1
+                        inventoryCopy.remove(inventoryItem)
                         break
             else:
-                for inventoryItem in self.inventory:
+                for inventoryItem in inventoryCopy:
                     if item.id == inventoryItem.id:
                         matchingItems += 1
         if matchingItems == len(order):

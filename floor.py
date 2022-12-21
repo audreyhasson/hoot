@@ -161,33 +161,38 @@ def floor_onScreenStart(app):
     app.selectedStartNode = None
     app.selectedEndNode = None
     app.nodesOfPath = None
-    app.soundTrack =  Sound('https://audio.jukehost.co.uk/zJwz1x8NsTp4RV48I87b4KhT1cJAe4xL') 
-    app.soundTrack.play(loop=True)
+    # app.soundTrack =  Sound('https://audio.jukehost.co.uk/zJwz1x8NsTp4RV48I87b4KhT1cJAe4xL') 
+    # app.soundTrack.play(loop=True)
     layNodes(app)
 
 # Takes in a base image of a bunch of owls and a 2D list of their keypoints
 def cleverInitOwlImages(app, baseImage, names):
     left = 41
     width = 92
-    # Next is a 2D list of all keypoints for the owls, which goes right, down, left, up
-    keypoints = [[
-        (-3, 24), (0, 20), (3, 24), (5, 20), (11, 20), 
-        (14, 19), (18, 14), (20, 9), (21, 2), (21, -1), 
-        (19, -5), (17, -14), (15, -19), (20, -22), 
-        (18, -24), (12, -24), (7, -25), (-6, -25), 
-        (-10, -23), (-16, -24), (-16, 3), (-14, 13), (-9, 19), (-5, 20)
-        ], [
-        (-15, 24), (-12, 19), (0, 20), 
-        (11, 19), (14, 24), (18, 6), (21, -4), 
-        (21, -13), (9, -25), (-11, -25), (-23, -13), 
-        (-23, -4), (-19, 6)], [
+    print([(x+3, y) for (x,y) in [
         (3, 24), (0, 20), (-3, 24), (-5, 20), 
         (-11, 20), (-14, 19), (-18, 14), (-20, 9), 
         (-21, 2), (-21, -1), (-19, -5), (-17, -14), 
         (-15, -19), (-20, -22), (-18, -24), (-12, -24),
         (-7, -25), (6, -25), (10, -23), (16, -24), 
         (16, 3), (14, 13), (9, 19), (5, 20)
-        ], [
+        ]])
+    # Next is a 2D list of all keypoints for the owls, which goes right, down, left, up
+    keypoints = [[
+        (-6, 24), (-3, 20), (0, 24), (2, 20), (8, 20), (11, 19), 
+        (15, 14), (17, 9), (18, 2), (18, -1), (16, -5), (14, -14), 
+        (12, -19), (17, -22), (15, -24), (9, -24), (4, -25), (-9, -25), (-13, -23), 
+        (-19, -24), (-19, 3), (-17, 13), (-12, 19), (-8, 20)], [
+        (-15, 24), (-12, 19), (0, 20), 
+        (11, 19), (14, 24), (18, 6), (21, -4), 
+        (21, -13), (9, -25), (-11, -25), (-23, -13), 
+        (-23, -4), (-19, 6)], [
+        (6, 24), (3, 20), (0, 24), (-2, 20), (-8, 20), 
+        (-11, 19), (-15, 14), (-17, 9), (-18, 2), 
+        (-18, -1), (-16, -5), (-14, -14), (-12, -19), 
+        (-17, -22), (-15, -24), (-9, -24), 
+        (-4, -25), (9, -25), (13, -23), (19, -24), 
+        (19, 3), (17, 13), (12, 19), (8, 20)], [
         (-15, 24), (-12, 19), (0, 20), 
         (11, 19), (14, 24), (18, 6), (21, -4), 
         (21, -13), (9, -25), (-11, -25), (-23, -13), 
@@ -374,16 +379,16 @@ def floor_redrawAll(app):
     colors = ['red', 'orange', 'yellow', 'green', 
     'blue', 'purple', 'black', 'gray', 'brown']
     cx, cy = app.waitress.cx, app.waitress.cy
-    polygonCords = getCordsFromDeltaPoints(cx, cy, 
+    polygonCords = getCordsFromDeltaPoints(cx+50, cy, 
                     app.waitress.imageList[app.waitress.dIndex].keypoints, 
                     False)
     wrappedPolygonCords = getCordsFromDeltaPoints(cx, cy, 
                     app.waitress.imageList[app.waitress.dIndex].keypoints, 
                     True)
-    # drawPolygon(*polygonCords, fill='turquoise')
-    # for i in range(len(app.waitress.imageList[app.waitress.dIndex].keypoints)):
-    #     x, y = wrappedPolygonCords[i]
-    #     drawCircle(x, y, 2, fill=colors[i%len(colors)])
+    drawPolygon(*polygonCords, fill='turquoise')
+    for i in range(len(app.waitress.imageList[app.waitress.dIndex].keypoints)):
+        x, y = wrappedPolygonCords[i]
+        drawCircle(x, y, 2, fill=colors[i%len(colors)])
     if app.showNodes:
         drawNodesAndEdges(app)
         for node in app.tableNodes:
@@ -762,22 +767,19 @@ def floor_onKeyPress(app, key):
     elif key=='N':
         app.showNodes = not app.showNodes
     elif key=='q':
-        app.selectedStartNode = None
-        app.selectedEndNode = None
-        app.nodesOfPath = None
+        if app.selectedTable!=None:
+            print(app.tableData[app.selectedTable].order)
     elif key=='s':
         # Set debugging mode
         table = app.tableData[0]
         table.occupants = 4
         # Add items to order and add items to ticket
-        order = ['rat', 'frog', 'worm', 'fish']
+        order = ['Water', 'Water', 'Sprite']
         table.order = order
-        for item in order:
-            table.ticket.addItem(item)
-            table.ticket.lastProgressMade = app.steps
+        table.lastAttended = app.steps
         # Add give order task to table.task
-        table.tasks.append(Task('give order', table.num))
-        table.status = 4
+        table.tasks.append(Task('give drinks', table.num))
+        table.status = 2
     elif key=='space':
         attemptTaskCompletion(app)
     elif key=='l':

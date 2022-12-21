@@ -4,8 +4,8 @@ def settings_onScreenStart(app):
     app.settingsBackground = CMUImage(Image.open('images/settingsScreen.png'))
     app.settingsArrowImg = CMUImage(Image.open('images/settingsArrow.png'))
     app.musicPlaying = True
-    app.soundTrack =  Sound('https://audio.jukehost.co.uk/zJwz1x8NsTp4RV48I87b4KhT1cJAe4xL') 
-    app.soundTrack.play(loop=True)
+    # app.soundTrack =  Sound('https://audio.jukehost.co.uk/zJwz1x8NsTp4RV48I87b4KhT1cJAe4xL') 
+    # app.soundTrack.play(loop=True)
 
 def getArrowY(app):
     if app.difficulty == 1:
