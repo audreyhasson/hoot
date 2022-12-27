@@ -161,8 +161,8 @@ def floor_onScreenStart(app):
     app.selectedStartNode = None
     app.selectedEndNode = None
     app.nodesOfPath = None
-    # app.soundTrack =  Sound('https://audio.jukehost.co.uk/zJwz1x8NsTp4RV48I87b4KhT1cJAe4xL') 
-    # app.soundTrack.play(loop=True)
+    app.soundTrack =  Sound('https://audio.jukehost.co.uk/zJwz1x8NsTp4RV48I87b4KhT1cJAe4xL') 
+    app.soundTrack.play(loop=True)
     layNodes(app)
 
 # Takes in a base image of a bunch of owls and a 2D list of their keypoints
@@ -385,10 +385,10 @@ def floor_redrawAll(app):
     wrappedPolygonCords = getCordsFromDeltaPoints(cx, cy, 
                     app.waitress.imageList[app.waitress.dIndex].keypoints, 
                     True)
-    drawPolygon(*polygonCords, fill='turquoise')
-    for i in range(len(app.waitress.imageList[app.waitress.dIndex].keypoints)):
-        x, y = wrappedPolygonCords[i]
-        drawCircle(x, y, 2, fill=colors[i%len(colors)])
+    # drawPolygon(*polygonCords, fill='turquoise')
+    # for i in range(len(app.waitress.imageList[app.waitress.dIndex].keypoints)):
+    #     x, y = wrappedPolygonCords[i]
+    #     drawCircle(x, y, 2, fill=colors[i%len(colors)])
     if app.showNodes:
         drawNodesAndEdges(app)
         for node in app.tableNodes:
@@ -494,6 +494,7 @@ def drawOverlay(app):
     #                 app.width-70, app.barHeight/2, size = 24, align='left', fill='white')
     # Draw stars/server score in stars box
     starColor = rgb(151, 118, 0)
+    drawLabel(f'{round(app.waitress.score*5/100)}', app.sidebarWidth+400, app.barHeight/2, size=20, fill=starColor, align='left')
     #kitchen
     height = 30
     width = 80
@@ -503,7 +504,6 @@ def drawOverlay(app):
     # # server station
     drawRect(app.width-50, app.height-height-5, width, height, fill=color, align='center', border='black')
     drawLabel('Station →' ,app.width-50, app.height-height-5, size=16)
-    drawLabel(f'{round(app.waitress.score*5/100)}', app.sidebarWidth+400, app.barHeight/2, size=20, fill=starColor, align='left')
 
 # THIS IS SOURCED FROM THE CMU PIL DEMO2 PROVIDED EDITING PIXELS FILE (and slightly adjusted)
 def makeNewColorImage(sourceImage, newColor):
@@ -575,9 +575,8 @@ def makeNewCustomer(app):
     if path==None:
         print("cant create cust rn")
         return
-    # Reset the table's tip and tasklist
+    # Reset the table's tip
     table.status = 0
-    table.tasks = []
 
     followerNum = random.randint(0, table.maxOccupancy-2)
     print(table.maxOccupancy)
@@ -605,14 +604,22 @@ def getDestinationIndex(app):
     return tableChoice
 
 def getDestNodesFromIndex(app, tableChoice):
+    print('think destination: ', app.tableData[tableChoice].seats)
     destIds = [(0,tableChoice*4+q) for q in range(4)]
     destIds = set(destIds)
+    print('right ids:', destIds)
     destNodes = set()
     for node in app.nodeList:
         cx, cy, id = node
         if id in destIds:
             destNodes.add((cx, cy))
+    print('real destination: ', destNodes)
+    # listNodes = [list[0] for list in app.tableData[tableChoice].seats]
+    # destNodes = set(listNodes)
+    # print('lasyONes',destNodes)
     return destNodes
+    # TRYING NEW THING TO FIX SEAT BUG
+
 
 def getPathFromCords(app, coordinateList):
     if len(coordinateList[0])<2:
@@ -767,8 +774,11 @@ def floor_onKeyPress(app, key):
     elif key=='N':
         app.showNodes = not app.showNodes
     elif key=='q':
-        if app.selectedTable!=None:
-            print(app.tableData[app.selectedTable].order)
+        print('------------------------------------------')
+        for node in app.nodeList:
+            x, y, id = node
+            if id[0] ==0:
+                print(node)
     elif key=='s':
         # Set debugging mode
         table = app.tableData[0]
@@ -807,7 +817,7 @@ def handleWaitressMovement(app, key):
         app.pendingOrder = None
 
         alert(app, "Don't walk away when a guest is talking! Now you'll never know their order.")
-        app.waitress.score -= .05
+        app.waitress.deduct(.05)
     #app.selectedTable = None
     app.waitress.lastDIndex = app.waitress.dIndex
     cx, cy = app.waitress.cx, app.waitress.cy
@@ -913,6 +923,9 @@ def handleRenovateButton(app, mouseX, mouseY):
         buttonTop<=mouseY<=buttonTop+buttonHeight):
         app.showRenovatePopup = True
     
+def floor_onMouseMove(app, mouseX, mouseY):
+    if app.showNodes:
+        print(mouseX, mouseY)
 
 def floor_onMousePress(app, mouseX, mouseY):
     handleRenovateButton(app, mouseX, mouseY)
@@ -1134,8 +1147,8 @@ def floor_onStep(app):
         makeNewCustomer(app)
         app.lastEntrance = app.steps
     else:
-        # How many customers enter per 20 seconds is based on difficulty
-        entranceInterval = 20 * 20 / app.difficulty
+        # How many customers enter per 40 seconds is based on difficulty
+        entranceInterval = 40 * 20 / app.difficulty
         if app.lastEntrance + entranceInterval < app.steps:
             makeNewCustomer(app)
             app.lastEntrance = app.steps
@@ -1188,7 +1201,7 @@ def resetTable(table):
     table.order = []
     table.contents = []
     table.bill = Bill(table.num) # Will maybe need to create a bill class but maybe also not
-    table.seats = [[getEndpoint((180/table.maxOccupancy)*p-150, table.radius, table.cx, table.cy), False] for p in range(4)]
+    table.seats = [[getEndpoint((180/table.maxOccupancy)*p-150, table.radius+10, table.cx, table.cy), False] for p in range(4)]
 
 
 # MOVED INTO CUSTOMER CLASS

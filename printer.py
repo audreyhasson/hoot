@@ -62,8 +62,8 @@ def printer_onKeyPress(app, key):
         if int(key)<len(app.tableData):
             app.tableToShow = int(key)
     elif key=='enter':
-        if app.tableToShow!=None and app.tableData[app.tableToShow].bill.items!=[]:
-            bill = app.tableData[app.tableToShow].bill
+        bill = app.tableData[app.tableToShow].bill
+        if app.tableToShow!=None and app.tableData[app.tableToShow].bill.items!=[] and not app.tray.contains([bill]):
             alert(app, f'Added bill for table {app.tableToShow} to tray')
             app.tray.inventory.append(bill)
     elif key == 'i':

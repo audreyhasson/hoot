@@ -72,6 +72,7 @@ class Customer(Sprite):
             self.cy = cy  
             self.imageList[self.dIndex].walk()    
         if self.path == [] and not self.seated and self.table!=None:
+            print('trying to sit')
             self.table.tip = None
             # Jump to an open seat
             seatedPos = None
@@ -83,11 +84,17 @@ class Customer(Sprite):
                     self.cx, self.cy = seatedPos[0], seatedPos[1]
                     seat[1] = True
                     self.seated = True
+                    print('satted')
                     self.angle = getAngle(*seatedPos, self.table.cx, self.table.cy)
                     if self.table.status==0: 
+                        self.table.tasks = []
                         self.table.addTask('say hi')
                         self.table.status = 1
                     return
+                else:
+                    print(
+                        'couldnt sit rip'
+                    )
         # After moving, make waitress react
         waitress = app.waitress
         # right , down, left, up
@@ -123,6 +130,12 @@ class Waitress(Sprite):
     def draw(self):
         img = self.imageList[self.dIndex].picture
         drawImage(img, self.cx, self.cy, align='center')
+    
+    def deduct(self, num):
+        if self.score>20:
+            self.score -= num
+        else:
+            self.score = 20
 
 class Table():
     # [[coords], occupants, maxOccupancy]
@@ -588,7 +601,7 @@ def polygonPolygonIntersection(object, subject, subjectLines):
 
 def handleCrash(app):
     alert(app, 'Yikes, you just ran into someone!')
-    app.waitress.score -= .05
+    app.waitress.deduct(.05)
 
 # Takes (cx, cy), radius, imageList, dIndex
 def hitTable(app, object, imageList, dIndex, givenRadius):
@@ -751,6 +764,7 @@ def getEndpoint(theta, radius, cx, cy):
 
 
 def layNodes(app):
+    print('laying again!')
     # If there are no tables, don't proceed
     if app.tableData == []: 
         return
